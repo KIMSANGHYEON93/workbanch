@@ -1,0 +1,184 @@
+@page "/board"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@using Workbench.Domain.Enums
+@using Workbench.Domain.Interfaces
+@using Workbench.Web.Services
+@inject IIssueService IssueService
+@inject IProjectService ProjectService
+
+<PageTitle>보드 · Workbench</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">보드</h1>
+    <a class="btn btn-primary" href="/issues/new">새 이슈</a>
+</div>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger" role="alert">@_loadError</div>
+}
+else
+{
+    <div class="row g-2 mb-3">
+        <div class="col-md-4">
+            <select class="form-select" @bind="_projectId" @bind:after="LoadAsync" aria-label="프로젝트">
+                <option value="@Guid.Empty">전체 프로젝트</option>
+                @foreach (var project in _projects)
+                {
+                    <option value="@project.Id">@project.Key · @project.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <select class="form-select" @bind="_assigneeId" @bind:after="LoadAsync" aria-label="담당자">
+                <option value="@Guid.Empty">전체 담당자</option>
+                @foreach (var user in _assignees)
+                {
+                    <option value="@user.Id">@user.DisplayName</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (_actionError is not null)
+    {
+        <div class="alert alert-warning" role="alert">@_actionError</div>
+    }
+
+    @if (_issues is null)
+    {
+        <p class="text-muted">불러오는 중…</p>
+    }
+    else
+    {
+        <div class="board-columns">
+            @foreach (var column in BoardLayout.Columns)
+            {
+                var cards = _issues.Where(i => i.Status == column).ToList();
+
+                <div class="board-column @(_dragOver == column ? "board-column-active" : "")"
+                     @ondragover:preventDefault="true"
+                     @ondragenter="() => _dragOver = column"
+                     @ondragleave="() => _dragOver = null"
+                     @ondrop="() => DropAsync(column)">
+                    <div class="board-column-header">
+                        <span class="badge @IssueDisplay.BadgeClass(column)">@IssueDisplay.Label(column)</span>
+                        <span class="text-muted small">@cards.Count</span>
+                    </div>
+
+                    @foreach (var card in cards)
+                    {
+                        <article class="board-card" draggable="true" @ondragstart="() => _dragging = card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <a href="@($"/issues/{card.Key}")" class="small fw-semibold">@card.Key</a>
+                                <span class="badge @IssueDisplay.BadgeClass(card.Priority)">
+                                    @IssueDisplay.Label(card.Priority)
+                                </span>
+                            </div>
+                            <div class="board-card-title">@card.Title</div>
+                            <div class="text-muted small">
+                                @IssueDisplay.Label(card.Type)
+                                @if (card.AssigneeName is not null)
+                                {
+                                    <span> · @card.AssigneeName</span>
+                                }
+                            </div>
+                            <div class="board-card-actions">
+                                @* 끌어놓기를 쓸 수 없는 사람을 위한 경로. 키보드로 조작할 수 있어야 한다. *@
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        disabled="@(BoardLayout.Previous(column) is null)"
+                                        aria-label="@($"{card.Key} 를 왼쪽 열로 이동")"
+                                        @onclick="() => MoveAsync(card, BoardLayout.Previous(column))">◀</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        disabled="@(BoardLayout.Next(column) is null)"
+                                        aria-label="@($"{card.Key} 를 오른쪽 열로 이동")"
+                                        @onclick="() => MoveAsync(card, BoardLayout.Next(column))">▶</button>
+                            </div>
+                        </article>
+                    }
+
+                    @if (cards.Count == 0)
+                    {
+                        <p class="text-muted small mb-0">비어 있음</p>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<IssueListItem>? _issues;
+    private IReadOnlyList<ProjectListItem> _projects = [];
+    private IReadOnlyList<UserOption> _assignees = [];
+    private IssueListItem? _dragging;
+    private IssueStatus? _dragOver;
+    private string? _loadError;
+    private string? _actionError;
+
+    private Guid _projectId = Guid.Empty;
+    private Guid _assigneeId = Guid.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = await ProjectService.ListAsync();
+            _assignees = await IssueService.ListAssigneeOptionsAsync();
+        }
+        catch (Exception)
+        {
+            _loadError = "화면을 준비하지 못했습니다. 데이터베이스 연결을 확인하세요.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+
+        try
+        {
+            // 보드는 완료·취소 열을 가지므로 닫힌 이슈까지 가져온다.
+            _issues = await IssueService.ListAsync(new IssueQuery(
+                ProjectId: _projectId == Guid.Empty ? null : _projectId,
+                AssigneeId: _assigneeId == Guid.Empty ? null : _assigneeId,
+                IncludeClosed: true));
+        }
+        catch (Exception)
+        {
+            _loadError = "보드를 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+    }
+
+    private async Task DropAsync(IssueStatus column)
+    {
+        var card = _dragging;
+
+        _dragging = null;
+        _dragOver = null;
+
+        await MoveAsync(card, column);
+    }
+
+    private async Task MoveAsync(IssueListItem? card, IssueStatus? target)
+    {
+        if (card is null || target is not { } status || card.Status == status)
+        {
+            return;
+        }
+
+        _actionError = null;
+
+        var result = await IssueService.ChangeStatusAsync(card.Id, status);
+        if (!result.Succeeded)
+        {
+            _actionError = string.Join(" ", result.Errors);
+        }
+
+        await LoadAsync();
+    }
+}
