@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<WorkbenchDbContext>());
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUserProvisioner, UserProvisioner>();
+        services.AddScoped<IProjectRepository, ProjectRepository>();
 
         return services;
     }

@@ -6,8 +6,9 @@
 - **DB**: Azure SQL Database (로컬은 LocalDB / Docker SQL Server)
 - **ORM**: Entity Framework Core
 - **인증**: Microsoft Entra ID (Microsoft.Identity.Web) — 개발 중에는 우회 옵션 제공
+- **UI**: Bootstrap 5 (템플릿 로컬 번들, 외부 CDN 0건)
 - **파일**: Azure Blob Storage (로컬은 Azurite)
-- **마크다운**: Markdig 렌더링
+- **마크다운**: Markdig 렌더링 + TextArea/미리보기 에디터 (JS interop 없음)
 
 ---
 
@@ -19,7 +20,7 @@
 | 2 | Domain 엔티티 + Enum | ✅ 완료 |
 | 3 | Infrastructure: DbContext + EF Core 마이그레이션 | ✅ 완료 |
 | 4 | 인증 (Entra ID) 연동 + 개발용 우회 | ✅ 완료 |
-| 5 | Project CRUD | ⬜ |
+| 5 | Project CRUD | ✅ 완료 |
 | 6 | Issue CRUD + 상태 변경 + 리스트 | ⬜ |
 | 7 | 마크다운 에디터 컴포넌트 | ⬜ |
 | 8 | Page CRUD + 계층 구조 | ⬜ |
@@ -212,6 +213,49 @@ DB 장애 시 `EnsureProvisionedAsync` 는 **예외를 던지지 않고 `false` 
 실패는 캐시하지 않으므로 DB 가 돌아오면 다음 요청에서 곧바로 다시 시도한다.
 
 실측: DB 를 못 여는 상태에서 `GET /` → **HTTP 200**, 경고 1줄, 미처리 예외 0건.
+
+---
+
+## 프로젝트 (5단계)
+
+| 화면 | 경로 |
+|---|---|
+| 목록 | `/projects` — 키·이름·설명·이슈 수, 인라인 삭제 확인 |
+| 생성 | `/projects/new` |
+| 수정 | `/projects/{id}/edit` |
+
+`ProjectService` 가 업무 규칙을 갖고, `IProjectRepository` 가 조회를 갖는다.
+
+### 규칙 4가지
+
+1. **키는 정규화한다** — 앞뒤 공백 제거 + 대문자. `dev`·`DEV `·`Dev` 가 서로 다른 프로젝트가 되면
+   이슈 키 접두어가 갈라진다. 정규화·검증은 `ProjectKey` 한 곳에서만 한다.
+2. **키는 생성 후 변경할 수 없다** — `Issue.Key` 가 `DEV-123` 으로 비정규화돼 있어, 키를 바꾸면
+   이미 발급된 이슈 키 전부가 프로젝트와 어긋난다. 수정 화면에서 입력란이 비활성화되고,
+   서버도 별도로 거부한다(화면만 막으면 우회된다).
+3. **이슈가 남은 프로젝트는 삭제하지 않는다** — FK 가 CASCADE 라 이슈까지 조용히 사라진다.
+   개수를 알려주고 거부한다.
+4. **업무 규칙 위반은 예외가 아니라 `OperationResult`** — 화면이 오류를 폼 옆에 그대로 보여줘야 하고,
+   예상 가능한 입력 실수로 스택 트레이스를 남기지 않는다.
+
+### DB 장애 시 화면
+
+데이터 화면은 조회 실패를 잡아 **조치 가능한 문장**만 보여준다(원인은 로그에 남는다).
+DB 를 못 여는 상태에서 `/`·`/projects`·`/projects/new` 전부 **HTTP 200**, 미처리 예외 0건 — 실측.
+
+---
+
+## 테스트 전략
+
+| 층 | 방식 | 잡는 것 |
+|---|---|---|
+| 도메인 | 순수 단위 테스트 | 키 조립·정규화 규칙 |
+| 모델 형상 | 설계 시점 EF 모델 검사 (DB 불필요) | 인덱스·CHECK 제약·삭제 동작·인덱스 키 크기 |
+| 서비스 | 메모리 페이크 | 업무 규칙(검증·거부 조건) |
+| 저장소 / 종단 | **SQLite in-memory + 실제 `DbContext`** | LINQ 번역 실패, 실제 배선 |
+
+⚠ SQLite 는 SQL Server 가 아니다. 스키마 세부(인덱스 키 크기, `SET NULL` 등)는 모델 형상 계약이 담당하고,
+SQLite 테스트는 쿼리가 실제로 번역·실행되는지를 본다.
 
 ---
 
