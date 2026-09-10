@@ -1,0 +1,189 @@
+@page "/pages/new"
+@page "/pages/{Slug}/edit"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@inject IPageService PageService
+@inject IProjectService ProjectService
+@inject NavigationManager Navigation
+
+<PageTitle>@Title · Workbench</PageTitle>
+
+<h1 class="h3 mb-3">@Title</h1>
+
+@if (_notFound)
+{
+    <div class="alert alert-warning" role="alert">
+        페이지를 찾을 수 없습니다. <a href="/pages">목록으로 돌아가기</a>
+    </div>
+}
+else
+{
+    @if (_errors.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <ul class="mb-0">
+                @foreach (var error in _errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <EditForm Model="_model" OnValidSubmit="SubmitAsync" FormName="page-editor">
+        <DataAnnotationsValidator />
+
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label class="form-label" for="page-title">제목</label>
+                <InputText id="page-title" class="form-control" @bind-Value="_model.Title" />
+                <ValidationMessage For="() => _model.Title" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" for="page-slug">슬러그 (URL)</label>
+                <InputText id="page-slug" class="form-control" @bind-Value="_model.Slug"
+                           placeholder="@SlugPlaceholder" />
+                <div class="form-text">
+                    @(IsEditing
+                        ? "비워 두면 기존 주소를 유지합니다 — 제목을 고쳐도 링크가 끊기지 않습니다."
+                        : "비워 두면 제목에서 자동으로 만듭니다.")
+                </div>
+                <ValidationMessage For="() => _model.Slug" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label" for="page-parent">상위 페이지</label>
+                <InputSelect id="page-parent" class="form-select" @bind-Value="_model.ParentPageId">
+                    <option value="">없음 (최상위)</option>
+                    @foreach (var option in _parentOptions)
+                    {
+                        <option value="@option.Id">@(new string('—', option.Depth)) @option.Title</option>
+                    }
+                </InputSelect>
+                @if (IsEditing)
+                {
+                    <div class="form-text">자기 자신과 하위 페이지는 목록에 나오지 않습니다(순환 방지).</div>
+                }
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label" for="page-project">연결 프로젝트</label>
+                <InputSelect id="page-project" class="form-select" @bind-Value="_model.ProjectId">
+                    <option value="">없음 (전사 문서)</option>
+                    @foreach (var project in _projects)
+                    {
+                        <option value="@project.Id">@project.Key · @project.Name</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-12">
+                <div class="form-check">
+                    <InputCheckbox id="page-published" class="form-check-input"
+                                   @bind-Value="_model.IsPublished" />
+                    <label class="form-check-label" for="page-published">공개</label>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label class="form-label" for="page-content">본문</label>
+                <MarkdownEditor Id="page-content" @bind-Value="_model.ContentMarkdown" Rows="18"
+                                Placeholder="마크다운으로 작성하세요." />
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
+                @(_saving ? "저장 중…" : "저장")
+            </button>
+            <a class="btn btn-outline-secondary" href="@CancelHref">취소</a>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public string? Slug { get; set; }
+
+    private readonly PageEditModel _model = new();
+    private IReadOnlyList<PageTreeItem> _parentOptions = [];
+    private IReadOnlyList<ProjectListItem> _projects = [];
+    private List<string> _errors = [];
+    private Guid _pageId;
+    private string _currentSlug = string.Empty;
+    private bool _notFound;
+    private bool _saving;
+
+    private bool IsEditing => !string.IsNullOrWhiteSpace(Slug);
+
+    private string Title => IsEditing ? "페이지 수정" : "새 페이지";
+
+    private string CancelHref => IsEditing ? $"/pages/{_currentSlug}" : "/pages";
+
+    private string SlugPlaceholder => IsEditing ? _currentSlug : "제목에서 자동 생성";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = await ProjectService.ListAsync();
+
+            if (!IsEditing)
+            {
+                _parentOptions = await PageService.ListParentOptionsAsync();
+                return;
+            }
+
+            var page = await PageService.GetBySlugAsync(Slug!);
+            if (page is null)
+            {
+                _notFound = true;
+                return;
+            }
+
+            _pageId = page.Id;
+            _currentSlug = page.Slug;
+            _model.Title = page.Title;
+            _model.ContentMarkdown = page.ContentMarkdown;
+            _model.ParentPageId = page.ParentPageId;
+            _model.ProjectId = page.ProjectId;
+            _model.IsPublished = page.IsPublished;
+
+            _parentOptions = await PageService.ListParentOptionsAsync(page.Id);
+        }
+        catch (Exception)
+        {
+            _errors = ["화면을 준비하지 못했습니다. 데이터베이스 연결을 확인하세요."];
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var result = IsEditing
+                ? await PageService.UpdateAsync(_pageId, _model)
+                : await PageService.CreateAsync(_model);
+
+            if (!result.Succeeded)
+            {
+                _errors = [.. result.Errors];
+                return;
+            }
+
+            Navigation.NavigateTo($"/pages/{result.Value}");
+        }
+        catch (Exception)
+        {
+            _errors = ["저장하지 못했습니다. 데이터베이스 연결을 확인하세요."];
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

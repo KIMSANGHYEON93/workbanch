@@ -1,0 +1,119 @@
+@page "/pages/{Slug}"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@inject IPageService PageService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_page?.Title ?? "페이지") · Workbench</PageTitle>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger" role="alert">@_loadError</div>
+}
+else if (_notFound)
+{
+    <div class="alert alert-warning" role="alert">
+        페이지를 찾을 수 없습니다. <a href="/pages">목록으로 돌아가기</a>
+    </div>
+}
+else if (_page is null)
+{
+    <p class="text-muted">불러오는 중…</p>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            @if (_page.ParentSlug is not null)
+            {
+                <div class="text-muted small">
+                    <a href="@($"/pages/{_page.ParentSlug}")">@_page.ParentTitle</a> /
+                </div>
+            }
+            <h1 class="h3 mb-0">
+                @_page.Title
+                @if (!_page.IsPublished)
+                {
+                    <span class="badge text-bg-warning align-middle">비공개</span>
+                }
+            </h1>
+            <div class="text-muted small mt-1">
+                @(_page.CreatedByName ?? "—") · 수정 @_page.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                @if (_page.ProjectKey is not null)
+                {
+                    <span class="badge text-bg-light ms-1">@_page.ProjectKey</span>
+                }
+            </div>
+        </div>
+        <div class="text-nowrap">
+            <a class="btn btn-sm btn-outline-secondary" href="@($"/pages/{_page.Slug}/edit")">수정</a>
+            @if (_confirmingDelete)
+            {
+                <button type="button" class="btn btn-sm btn-danger" @onclick="DeleteAsync">삭제 확인</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        @onclick="() => _confirmingDelete = false">취소</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        @onclick="() => _confirmingDelete = true">삭제</button>
+            }
+        </div>
+    </div>
+
+    @if (_actionError is not null)
+    {
+        <div class="alert alert-warning" role="alert">@_actionError</div>
+    }
+
+    <MarkdownView Markdown="_page.ContentMarkdown" EmptyText="내용이 없습니다." />
+}
+
+@code {
+    [Parameter]
+    public string Slug { get; set; } = string.Empty;
+
+    private PageDetail? _page;
+    private string? _loadError;
+    private string? _actionError;
+    private bool _notFound;
+    private bool _confirmingDelete;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+        _notFound = false;
+
+        try
+        {
+            _page = await PageService.GetBySlugAsync(Slug);
+            _notFound = _page is null;
+        }
+        catch (Exception)
+        {
+            _loadError = "페이지를 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_page is null)
+        {
+            return;
+        }
+
+        _confirmingDelete = false;
+        _actionError = null;
+
+        var result = await PageService.DeleteAsync(_page.Id);
+        if (!result.Succeeded)
+        {
+            _actionError = string.Join(" ", result.Errors);
+            return;
+        }
+
+        Navigation.NavigateTo("/pages");
+    }
+}
