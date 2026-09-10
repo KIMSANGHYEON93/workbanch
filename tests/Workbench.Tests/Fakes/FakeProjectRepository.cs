@@ -50,6 +50,20 @@ public sealed class FakeProjectRepository : IProjectRepository
         CancellationToken cancellationToken = default) =>
         Task.FromResult(_projects.Any(p => p.Key == key && p.Id != excludingProjectId));
 
+    public Task<IReadOnlyList<Project>> SearchAsync(
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        var search = (text ?? string.Empty).Trim();
+
+        return Task.FromResult<IReadOnlyList<Project>>(search.Length == 0
+            ? []
+            : [.. _projects.Where(p =>
+                p.Key.Contains(search)
+                || p.Name.Contains(search)
+                || (p.Description?.Contains(search) ?? false))]);
+    }
+
     public Task<IReadOnlyDictionary<Guid, int>> GetIssueCountsAsync(
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyDictionary<Guid, int>>(IssueCounts);

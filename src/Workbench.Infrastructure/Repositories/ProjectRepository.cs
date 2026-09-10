@@ -30,6 +30,24 @@ public class ProjectRepository : Repository<Project>, IProjectRepository
                 p => p.Key == key && (excludingProjectId == null || p.Id != excludingProjectId),
                 cancellationToken);
 
+    public async Task<IReadOnlyList<Project>> SearchAsync(
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        var search = (text ?? string.Empty).Trim();
+        if (search.Length == 0)
+        {
+            return [];
+        }
+
+        return await Set.AsNoTracking()
+            .Where(p => p.Key.Contains(search)
+                || p.Name.Contains(search)
+                || (p.Description != null && p.Description.Contains(search)))
+            .OrderBy(p => p.Key)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyDictionary<Guid, int>> GetIssueCountsAsync(
         CancellationToken cancellationToken = default)
     {

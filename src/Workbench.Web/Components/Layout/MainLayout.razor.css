@@ -110,3 +110,12 @@ main {
     font-size: 0.75rem;
     color: #6c757d;
 }
+
+.top-row {
+    gap: 1rem;
+}
+
+.top-search {
+    flex: 0 1 18rem;
+    margin-right: auto;
+}

@@ -1,0 +1,113 @@
+@page "/search"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@using Workbench.Application
+@inject ISearchService SearchService
+@inject NavigationManager Navigation
+
+<PageTitle>검색 · Workbench</PageTitle>
+
+<h1 class="h3 mb-3">검색</h1>
+
+<div class="mb-3">
+    <input class="form-control" placeholder="이슈 키·제목, 페이지 제목·본문, 프로젝트"
+           value="@_query" @oninput="OnQueryChangedAsync" aria-label="검색어" />
+    <div class="form-text">@MinLengthHint</div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger" role="alert">@_error</div>
+}
+else if (_results is null)
+{
+    <p class="text-muted">검색어를 입력하세요.</p>
+}
+else if (_results.TotalHits == 0)
+{
+    <div class="alert alert-info" role="alert">일치하는 항목이 없습니다.</div>
+}
+else
+{
+    @if (_results.AnyTruncated)
+    {
+        <div class="alert alert-warning" role="alert">
+            결과가 많아 종류별 @SearchLimits.MaxHitsPerKind 건까지만 표시합니다. 검색어를 좁혀 보세요.
+        </div>
+    }
+
+    @foreach (var group in _results.Groups.Where(g => g.Hits.Count > 0))
+    {
+        <section class="mb-4">
+            <h2 class="h6 text-muted">
+                @KindLabel(group.Kind)
+                <span class="badge text-bg-light">@group.Hits.Count@(group.Truncated ? "+" : "")</span>
+            </h2>
+            <ul class="list-group">
+                @foreach (var hit in group.Hits)
+                {
+                    <li class="list-group-item">
+                        <a href="@hit.Url">@hit.Title</a>
+                        @if (!string.IsNullOrWhiteSpace(hit.Subtitle))
+                        {
+                            <span class="text-muted small ms-2">@hit.Subtitle</span>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
+    private string _query = string.Empty;
+    private SearchResults? _results;
+    private string? _error;
+
+    private static string MinLengthHint =>
+        $"{SearchLimits.MinQueryLength}자 이상 입력하세요. 완료·취소된 이슈도 함께 찾습니다.";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _query = Query ?? string.Empty;
+        await RunAsync();
+    }
+
+    private async Task OnQueryChangedAsync(ChangeEventArgs args)
+    {
+        _query = args.Value?.ToString() ?? string.Empty;
+        await RunAsync();
+    }
+
+    private async Task RunAsync()
+    {
+        _error = null;
+
+        if (_query.Trim().Length < SearchLimits.MinQueryLength)
+        {
+            _results = null;
+            return;
+        }
+
+        try
+        {
+            _results = await SearchService.SearchAsync(_query);
+        }
+        catch (Exception)
+        {
+            _error = "검색하지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+    }
+
+    private static string KindLabel(SearchHitKind kind) => kind switch
+    {
+        SearchHitKind.Issue => "이슈",
+        SearchHitKind.Page => "페이지",
+        SearchHitKind.Project => "프로젝트",
+        _ => kind.ToString(),
+    };
+}
