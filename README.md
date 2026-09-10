@@ -34,8 +34,10 @@
 
 ## 솔루션 구조
 
+저장소: [`KIMSANGHYEON93/workbanch`](https://github.com/KIMSANGHYEON93/workbanch) — 저장소 루트가 곧 솔루션 루트다.
+
 ```
-Workbench/
+workbanch/                         # 저장소 루트
 ├── Directory.Build.props          # 공통 빌드 속성 (net8.0, nullable, 코드 스타일)
 ├── Workbench.sln
 ├── src/
@@ -119,9 +121,9 @@ export ConnectionStrings__Workbench="Server=localhost,1433;Database=Workbench;Us
 
 ### 마이그레이션 명령
 
-```bash
-cd Workbench
+저장소 루트에서 실행한다.
 
+```bash
 # 도구는 로컬 tool manifest 에 고정돼 있다 (.config/dotnet-tools.json)
 dotnet tool restore
 
@@ -151,7 +153,8 @@ dotnet dotnet-ef migrations script --idempotent --project src/Workbench.Infrastr
 ### 빌드 · 테스트 · 실행
 
 ```bash
-cd Workbench
+git clone https://github.com/KIMSANGHYEON93/workbanch
+cd workbanch
 
 dotnet tool restore          # dotnet-ef (마이그레이션 도구)
 dotnet build
