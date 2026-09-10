@@ -10,6 +10,10 @@ public sealed class FakeUnitOfWork : IUnitOfWork
 
     public int SaveChangesCallCount { get; private set; }
 
+    public int DiscardCallCount { get; private set; }
+
+    public void DiscardChanges() => DiscardCallCount++;
+
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         SaveChangesCallCount++;

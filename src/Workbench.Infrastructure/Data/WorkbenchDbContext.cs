@@ -25,6 +25,8 @@ public class WorkbenchDbContext : DbContext, IUnitOfWork
 
     public DbSet<Attachment> Attachments => Set<Attachment>();
 
+    public void DiscardChanges() => ChangeTracker.Clear();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
