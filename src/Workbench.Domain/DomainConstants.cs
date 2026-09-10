@@ -19,7 +19,9 @@ public static class DomainConstants
         public const int Slug = 300;
         public const int FileName = 260;
         public const int ContentType = 128;
-        public const int BlobPath = 1024;
+        // 512자(1,024바이트). BlobPath 에는 UNIQUE 인덱스가 걸리는데 SQL Server 비클러스터드
+        // 인덱스 키 상한이 1,700바이트라, nvarchar(1024)=2,048바이트면 긴 값에서 INSERT 가 터진다.
+        public const int BlobPath = 512;
         public const int DisplayName = 200;
         public const int Email = 320;
     }
