@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IAppUserRepository, AppUserRepository>();
         services.AddScoped<IPageRepository, PageRepository>();
         services.AddScoped<ICommentRepository, CommentRepository>();
+        services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 
         return services;
     }

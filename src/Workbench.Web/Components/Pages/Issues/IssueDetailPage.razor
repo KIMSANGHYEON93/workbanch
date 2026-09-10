@@ -60,6 +60,8 @@ else
             <h2 class="h6 text-muted">설명</h2>
             <MarkdownView Markdown="_issue.DescriptionMarkdown" EmptyText="설명이 없습니다." />
 
+            <AttachmentPanel IssueId="_issue.Id" />
+
             <CommentThread IssueId="_issue.Id" />
         </div>
 

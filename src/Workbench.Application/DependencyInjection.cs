@@ -12,6 +12,7 @@ public static class DependencyInjection
         services.AddScoped<IIssueService, IssueService>();
         services.AddScoped<IPageService, PageService>();
         services.AddScoped<ICommentService, CommentService>();
+        services.AddScoped<IAttachmentService, AttachmentService>();
 
         return services;
     }

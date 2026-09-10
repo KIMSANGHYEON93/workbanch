@@ -1,3 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <!-- 확장자 판정 같은 내부 규칙은 공개 API 로 넓히지 않고 테스트에서만 직접 검증한다. -->
+    <InternalsVisibleTo Include="Workbench.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -1,0 +1,164 @@
+@using Microsoft.Extensions.Options
+@using Workbench.Application
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@inject IAttachmentService AttachmentService
+@inject IOptions<AttachmentOptions> Options
+
+<section class="attachment-panel mt-4">
+    <h2 class="h6 text-muted">첨부 파일 @(_attachments is null ? "" : $"({_attachments.Count})")</h2>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-warning" role="alert">@_error</div>
+    }
+
+    @if (_attachments is null)
+    {
+        <p class="text-muted">불러오는 중…</p>
+    }
+    else
+    {
+        @if (_attachments.Count == 0)
+        {
+            <p class="text-muted">첨부된 파일이 없습니다.</p>
+        }
+        else
+        {
+            <ul class="list-group mb-2">
+                @foreach (var file in _attachments)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>
+                            <a href="@($"/attachments/{file.Id}")">@file.FileName</a>
+                            <span class="text-muted small ms-2">@FormatSize(file.Size)</span>
+                        </span>
+                        <span class="text-muted small">
+                            @(file.UploadedByName ?? "—") ·
+                            @file.UploadedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                            @if (file.CanDelete)
+                            {
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2"
+                                        @onclick="() => DeleteAsync(file.Id)">삭제</button>
+                            }
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+
+        <InputFile OnChange="UploadAsync" class="form-control" disabled="@_uploading" />
+        <div class="form-text">
+            최대 @MaxMegabytes MB. 첨부는 브라우저에서 열리지 않고 항상 내려받기로 처리됩니다.
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public Guid? IssueId { get; set; }
+
+    [Parameter]
+    public Guid? PageId { get; set; }
+
+    private IReadOnlyList<AttachmentItem>? _attachments;
+    private string? _error;
+    private bool _uploading;
+
+    private long MaxBytes => Options.Value.MaxFileSizeBytes;
+
+    private long MaxMegabytes => MaxBytes / (1024 * 1024);
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+
+        try
+        {
+            _attachments = IssueId is { } issueId
+                ? await AttachmentService.ListForIssueAsync(issueId)
+                : PageId is { } pageId
+                    ? await AttachmentService.ListForPageAsync(pageId)
+                    : [];
+        }
+        catch (Exception)
+        {
+            _error = "첨부 목록을 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+            _attachments = [];
+        }
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs args)
+    {
+        _uploading = true;
+        _error = null;
+
+        try
+        {
+            var file = args.File;
+
+            // 상한을 스트림 열 때도 건다 — 서비스 검증만 믿으면 그 전에 이미 메모리를 다 쓴다.
+            await using var content = file.OpenReadStream(MaxBytes);
+
+            var result = IssueId is { } issueId
+                ? await AttachmentService.AttachToIssueAsync(
+                    issueId, content, file.Name, file.ContentType, file.Size)
+                : PageId is { } pageId
+                    ? await AttachmentService.AttachToPageAsync(
+                        pageId, content, file.Name, file.ContentType, file.Size)
+                    : OperationResult.Failure("첨부할 대상이 없습니다.");
+
+            if (!result.Succeeded)
+            {
+                _error = string.Join(" ", result.Errors);
+                return;
+            }
+
+            await LoadAsync();
+        }
+        catch (IOException)
+        {
+            // OpenReadStream 이 상한 초과 시 던진다.
+            _error = $"파일이 너무 큽니다. 최대 {MaxMegabytes}MB 까지 첨부할 수 있습니다.";
+        }
+        catch (Exception)
+        {
+            _error = "파일을 올리지 못했습니다. 잠시 후 다시 시도하세요.";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid attachmentId)
+    {
+        _error = null;
+
+        var result = await AttachmentService.DeleteAsync(attachmentId);
+        if (!result.Succeeded)
+        {
+            _error = string.Join(" ", result.Errors);
+        }
+
+        await LoadAsync();
+    }
+
+    // ⚠ 관계 패턴(`< 1024 =>`)을 쓰면 Razor 파서가 '<' 를 마크업 시작으로 읽어 빌드가 깨진다.
+    private static string FormatSize(long bytes)
+    {
+        const long Kilobyte = 1024;
+        const long Megabyte = Kilobyte * 1024;
+
+        if (bytes < Kilobyte)
+        {
+            return $"{bytes} B";
+        }
+
+        return bytes < Megabyte
+            ? $"{bytes / (double)Kilobyte:0.#} KB"
+            : $"{bytes / (double)Megabyte:0.#} MB";
+    }
+}
