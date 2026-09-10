@@ -4,6 +4,7 @@
 @using Workbench.Domain.Enums
 @using Workbench.Web.Services
 @inject IIssueService IssueService
+@inject IProjectAccess Access
 @inject NavigationManager Navigation
 
 <PageTitle>@(_issue?.Key ?? "이슈") · Workbench</PageTitle>
@@ -35,6 +36,12 @@ else
             </h1>
         </div>
         <div class="text-nowrap">
+            @if (!_permissions.CanWrite)
+            {
+                <span class="text-muted small" title="이 프로젝트의 구성원만 변경할 수 있습니다">읽기 전용</span>
+            }
+            else
+            {
             <a class="btn btn-sm btn-outline-secondary" href="@($"/issues/{_issue.Key}/edit")">수정</a>
             @if (_confirmingDelete)
             {
@@ -46,6 +53,7 @@ else
             {
                 <button type="button" class="btn btn-sm btn-outline-danger"
                         @onclick="() => _confirmingDelete = true">삭제</button>
+            }
             }
         </div>
     </div>
@@ -70,6 +78,7 @@ else
                 <dt class="col-5">상태</dt>
                 <dd class="col-7">
                     <select class="form-select form-select-sm" value="@_issue.Status"
+                            disabled="@(!_permissions.CanWrite)"
                             @onchange="OnStatusChangedAsync" aria-label="상태 변경">
                         @foreach (var status in Enum.GetValues<IssueStatus>())
                         {
@@ -120,6 +129,7 @@ else
     public string Key { get; set; } = string.Empty;
 
     private IssueDetail? _issue;
+    private ProjectPermissions _permissions = ProjectPermissions.None;
     private string? _loadError;
     private string? _actionError;
     private bool _notFound;
@@ -136,6 +146,10 @@ else
         {
             _issue = await IssueService.GetByKeyAsync(Key);
             _notFound = _issue is null;
+
+            _permissions = _issue is null
+                ? ProjectPermissions.None
+                : await Access.GetAsync(_issue.ProjectId);
         }
         catch (Exception)
         {

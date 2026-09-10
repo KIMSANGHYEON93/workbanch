@@ -166,8 +166,12 @@ public class ProjectServiceTests
         CreateService()
     {
         var repository = new FakeProjectRepository();
+        var members = new FakeProjectMemberRepository();
+        var users = new FakeAppUserRepository();
         var unitOfWork = new FakeUnitOfWork(repository);
-        var service = new ProjectService(repository, unitOfWork, new FakeCurrentUser());
+        var currentUser = new FakeCurrentUser();
+        var access = new ProjectAccessService(members, repository, users, unitOfWork, currentUser);
+        var service = new ProjectService(repository, members, access, unitOfWork, currentUser);
 
         return (service, repository, unitOfWork);
     }

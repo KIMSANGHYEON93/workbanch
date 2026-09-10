@@ -22,27 +22,10 @@ public sealed class CommentServiceEndToEndTests : IDisposable
     public CommentServiceEndToEndTests()
     {
         _dbContext = _database.Context;
-
-        var currentUser = new FakeCurrentUser();
-        var projectRepository = new ProjectRepository(_dbContext);
-        var issueRepository = new IssueRepository(_dbContext);
-        var pageRepository = new PageRepository(_dbContext);
-
-        _projects = new ProjectService(projectRepository, _dbContext, currentUser);
-        _pages = new PageService(pageRepository, projectRepository, _dbContext, currentUser);
-        _issues = new IssueService(
-            issueRepository,
-            projectRepository,
-            new AppUserRepository(_dbContext),
-            _dbContext,
-            currentUser,
-            NullLogger<IssueService>.Instance);
-        _comments = new CommentService(
-            new CommentRepository(_dbContext),
-            issueRepository,
-            pageRepository,
-            _dbContext,
-            currentUser);
+        _projects = _database.Projects;
+        _pages = _database.Pages;
+        _issues = _database.Issues;
+        _comments = _database.Comments;
     }
 
     [Fact]

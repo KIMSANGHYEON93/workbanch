@@ -19,6 +19,7 @@ public class IssueService : IIssueService
     private readonly IIssueRepository _issues;
     private readonly IProjectRepository _projects;
     private readonly IAppUserRepository _users;
+    private readonly IProjectAccess _access;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<IssueService> _logger;
@@ -27,6 +28,7 @@ public class IssueService : IIssueService
         IIssueRepository issues,
         IProjectRepository projects,
         IAppUserRepository users,
+        IProjectAccess access,
         IUnitOfWork unitOfWork,
         ICurrentUser currentUser,
         ILogger<IssueService> logger)
@@ -34,6 +36,7 @@ public class IssueService : IIssueService
         _issues = issues;
         _projects = projects;
         _users = users;
+        _access = access;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
         _logger = logger;
@@ -73,6 +76,11 @@ public class IssueService : IIssueService
         if (errors.Count > 0)
         {
             return OperationResult<string>.Failure([.. errors]);
+        }
+
+        if (await DenyIfCannotWriteAsync(model.ProjectId, cancellationToken) is { } denied)
+        {
+            return OperationResult<string>.Failure([.. denied.Errors]);
         }
 
         var reporter = await _currentUser.GetAsync(cancellationToken);
@@ -153,6 +161,11 @@ public class IssueService : IIssueService
                 "이슈를 다른 프로젝트로 옮길 수 없습니다. 이슈 키가 현재 프로젝트에 묶여 있습니다.");
         }
 
+        if (await DenyIfCannotWriteAsync(issue.ProjectId, cancellationToken) is { } denied)
+        {
+            return denied;
+        }
+
         var title = (model.Title ?? string.Empty).Trim();
 
         var errors = await ValidateAsync(model, title, cancellationToken);
@@ -194,6 +207,11 @@ public class IssueService : IIssueService
             return OperationResult.Failure("이슈를 찾을 수 없습니다.");
         }
 
+        if (await DenyIfCannotWriteAsync(issue.ProjectId, cancellationToken) is { } denied)
+        {
+            return denied;
+        }
+
         if (issue.Status == status)
         {
             // 같은 상태로의 변경은 성공으로 본다. UpdatedAt 을 건드리면 목록 정렬이 흔들린다.
@@ -217,6 +235,11 @@ public class IssueService : IIssueService
             return OperationResult.Failure("이슈를 찾을 수 없습니다.");
         }
 
+        if (await DenyIfCannotWriteAsync(issue.ProjectId, cancellationToken) is { } denied)
+        {
+            return denied;
+        }
+
         // 댓글·첨부는 FK CASCADE 로 함께 사라진다. 발급된 번호는 재사용하지 않는다
         // (Project.LastIssueNumber 를 되돌리지 않는다) — 지워진 키가 다른 이슈로 되살아나면
         // 과거 링크·문서가 엉뚱한 이슈를 가리킨다.
@@ -225,6 +248,17 @@ public class IssueService : IIssueService
 
         return OperationResult.Success();
     }
+
+    /// <summary>
+    /// 쓰기 권한이 없으면 실패를, 있으면 <c>null</c> 을 돌려준다.
+    /// 화면이 버튼을 감추더라도 서버가 다시 판정한다 — 감추는 것은 안내이지 통제가 아니다.
+    /// </summary>
+    private async Task<OperationResult?> DenyIfCannotWriteAsync(
+        Guid projectId,
+        CancellationToken cancellationToken) =>
+        (await _access.GetAsync(projectId, cancellationToken)).CanWrite
+            ? null
+            : OperationResult.Failure("이 프로젝트의 이슈를 변경할 권한이 없습니다.");
 
     private async Task<List<string>> ValidateAsync(
         IssueEditModel model,

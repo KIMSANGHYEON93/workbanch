@@ -31,10 +31,13 @@ public class IssueBoardTests : TestContext
         var unitOfWork = new FakeUnitOfWork();
         var currentUser = new FakeCurrentUser();
 
+        var members = new FakeProjectMemberRepository();
+        var access = new ProjectAccessService(members, _projects, _users, unitOfWork, currentUser);
+
         Services.AddSingleton<IProjectService>(
-            new ProjectService(_projects, unitOfWork, currentUser));
+            new ProjectService(_projects, members, access, unitOfWork, currentUser));
         Services.AddSingleton<IIssueService>(new IssueService(
-            _issues, _projects, _users, unitOfWork, currentUser, NullLogger<IssueService>.Instance));
+            _issues, _projects, _users, access, unitOfWork, currentUser, NullLogger<IssueService>.Instance));
     }
 
     [Fact]

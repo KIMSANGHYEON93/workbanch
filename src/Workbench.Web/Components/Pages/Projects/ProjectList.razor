@@ -46,12 +46,25 @@ else
             @foreach (var project in _projects)
             {
                 <tr>
-                    <td><span class="badge text-bg-secondary">@project.Key</span></td>
+                    <td>
+                        <span class="badge text-bg-secondary">@project.Key</span>
+                        @if (project.IsOpenProject)
+                        {
+                            <span class="badge text-bg-light ms-1"
+                                  title="구성원이 없어 로그인한 누구나 쓸 수 있습니다">열림</span>
+                        }
+                    </td>
                     <td>@project.Name</td>
                     <td class="text-muted">@project.Description</td>
                     <td class="text-end">@project.IssueCount</td>
                     <td class="text-end">
-                        @if (_pendingDeleteId == project.Id)
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="@($"/projects/{project.Id}/members")">구성원</a>
+                        @if (!project.CanAdminister)
+                        {
+                            <span class="text-muted small ms-2" title="관리자만 수정·삭제할 수 있습니다">읽기 전용</span>
+                        }
+                        else if (_pendingDeleteId == project.Id)
                         {
                             <span class="me-2">삭제할까요?</span>
                             <button type="button" class="btn btn-sm btn-danger"

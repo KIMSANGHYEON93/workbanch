@@ -10,17 +10,20 @@ public class PageService : IPageService
 {
     private readonly IPageRepository _pages;
     private readonly IProjectRepository _projects;
+    private readonly IProjectAccess _access;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUser _currentUser;
 
     public PageService(
         IPageRepository pages,
         IProjectRepository projects,
+        IProjectAccess access,
         IUnitOfWork unitOfWork,
         ICurrentUser currentUser)
     {
         _pages = pages;
         _projects = projects;
+        _access = access;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
     }
@@ -93,6 +96,11 @@ public class PageService : IPageService
             return OperationResult<string>.Failure([.. errors]);
         }
 
+        if (await DenyIfCannotWriteAsync(model.ProjectId, cancellationToken) is { } denied)
+        {
+            return OperationResult<string>.Failure([.. denied.Errors]);
+        }
+
         var user = await _currentUser.GetAsync(cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var newId = Guid.NewGuid();
@@ -133,6 +141,18 @@ public class PageService : IPageService
             return OperationResult<string>.Failure("페이지를 찾을 수 없습니다.");
         }
 
+        // 옮겨 가는 쪽과 원래 있던 쪽 모두에 권한이 있어야 한다 — 한쪽만 보면 권한 없는
+        // 프로젝트로 문서를 밀어 넣거나 빼낼 수 있다.
+        if (await DenyIfCannotWriteAsync(page.ProjectId, cancellationToken) is { } fromDenied)
+        {
+            return OperationResult<string>.Failure([.. fromDenied.Errors]);
+        }
+
+        if (await DenyIfCannotWriteAsync(model.ProjectId, cancellationToken) is { } toDenied)
+        {
+            return OperationResult<string>.Failure([.. toDenied.Errors]);
+        }
+
         var title = (model.Title ?? string.Empty).Trim();
         var pages = await _pages.ListAllAsync(cancellationToken);
 
@@ -169,6 +189,11 @@ public class PageService : IPageService
             return OperationResult.Failure("페이지를 찾을 수 없습니다.");
         }
 
+        if (await DenyIfCannotWriteAsync(page.ProjectId, cancellationToken) is { } denied)
+        {
+            return denied;
+        }
+
         // 자기참조 FK 가 NO ACTION 이라 자식이 있으면 DB 가 거절한다. 드라이버 오류를 화면에
         // 흘리는 대신, 무엇을 먼저 해야 하는지 알려준다.
         var childCount = await _pages.CountChildrenAsync(id, cancellationToken);
@@ -182,6 +207,24 @@ public class PageService : IPageService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return OperationResult.Success();
+    }
+
+    /// <summary>
+    /// 프로젝트에 연결되지 않은 페이지는 전사 문서라 누구나 쓸 수 있다.
+    /// 연결돼 있으면 그 프로젝트의 쓰기 권한을 따른다.
+    /// </summary>
+    private async Task<OperationResult?> DenyIfCannotWriteAsync(
+        Guid? projectId,
+        CancellationToken cancellationToken)
+    {
+        if (projectId is not { } id)
+        {
+            return null;
+        }
+
+        return (await _access.GetAsync(id, cancellationToken)).CanWrite
+            ? null
+            : OperationResult.Failure("이 프로젝트의 페이지를 변경할 권한이 없습니다.");
     }
 
     private async Task<List<string>> ValidateAsync(

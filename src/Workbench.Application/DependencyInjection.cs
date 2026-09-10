@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<ICommentService, CommentService>();
         services.AddScoped<IAttachmentService, AttachmentService>();
         services.AddScoped<ISearchService, SearchService>();
+        services.AddScoped<IProjectAccess, ProjectAccessService>();
 
         return services;
     }

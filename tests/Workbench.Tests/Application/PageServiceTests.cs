@@ -213,12 +213,20 @@ public class PageServiceTests
         public Harness()
         {
             UnitOfWork = new FakeUnitOfWork();
-            Service = new PageService(Pages, Projects, UnitOfWork, new FakeCurrentUser());
+            var currentUser = new FakeCurrentUser();
+            Access = new ProjectAccessService(Members, Projects, Users, UnitOfWork, currentUser);
+            Service = new PageService(Pages, Projects, Access, UnitOfWork, currentUser);
         }
 
         public FakePageRepository Pages { get; } = new();
 
         public FakeProjectRepository Projects { get; } = new();
+
+        public FakeProjectMemberRepository Members { get; } = new();
+
+        public FakeAppUserRepository Users { get; } = new();
+
+        public ProjectAccessService Access { get; }
 
         public FakeUnitOfWork UnitOfWork { get; }
 

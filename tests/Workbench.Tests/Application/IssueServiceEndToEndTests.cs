@@ -22,18 +22,8 @@ public sealed class IssueServiceEndToEndTests : IDisposable
     public IssueServiceEndToEndTests()
     {
         _dbContext = _database.Context;
-
-        var currentUser = new FakeCurrentUser();
-        var projectRepository = new ProjectRepository(_dbContext);
-
-        _projects = new ProjectService(projectRepository, _dbContext, currentUser);
-        _issues = new IssueService(
-            new IssueRepository(_dbContext),
-            projectRepository,
-            new AppUserRepository(_dbContext),
-            _dbContext,
-            currentUser,
-            NullLogger<IssueService>.Instance);
+        _projects = _database.Projects;
+        _issues = _database.Issues;
     }
 
     [Fact]

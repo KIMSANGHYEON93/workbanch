@@ -253,12 +253,15 @@ public class IssueServiceTests
         public Harness()
         {
             UnitOfWork = new FakeUnitOfWork();
+            var currentUser = new FakeCurrentUser();
+            Access = new ProjectAccessService(Members, Projects, Users, UnitOfWork, currentUser);
             Service = new IssueService(
                 Issues,
                 Projects,
                 Users,
+                Access,
                 UnitOfWork,
-                new FakeCurrentUser(),
+                currentUser,
                 NullLogger<IssueService>.Instance);
         }
 
@@ -267,6 +270,10 @@ public class IssueServiceTests
         public FakeProjectRepository Projects { get; } = new();
 
         public FakeAppUserRepository Users { get; } = new();
+
+        public FakeProjectMemberRepository Members { get; } = new();
+
+        public ProjectAccessService Access { get; }
 
         public FakeUnitOfWork UnitOfWork { get; }
 

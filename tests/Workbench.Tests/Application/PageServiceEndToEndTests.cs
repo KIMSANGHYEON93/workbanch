@@ -19,16 +19,8 @@ public sealed class PageServiceEndToEndTests : IDisposable
     public PageServiceEndToEndTests()
     {
         _dbContext = _database.Context;
-
-        var currentUser = new FakeCurrentUser();
-        var projectRepository = new ProjectRepository(_dbContext);
-
-        _projects = new ProjectService(projectRepository, _dbContext, currentUser);
-        _pages = new PageService(
-            new PageRepository(_dbContext),
-            projectRepository,
-            _dbContext,
-            currentUser);
+        _projects = _database.Projects;
+        _pages = _database.Pages;
     }
 
     [Fact]

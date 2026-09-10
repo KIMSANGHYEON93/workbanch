@@ -22,11 +22,7 @@ public sealed class ProjectServiceEndToEndTests : IDisposable
     public ProjectServiceEndToEndTests()
     {
         _dbContext = _database.Context;
-
-        _service = new ProjectService(
-            new ProjectRepository(_dbContext),
-            _dbContext,
-            new FakeCurrentUser());
+        _service = _database.Projects;
     }
 
     [Fact]

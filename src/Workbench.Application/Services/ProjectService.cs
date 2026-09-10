@@ -2,6 +2,7 @@ using Workbench.Application.DTOs;
 using Workbench.Application.Interfaces;
 using Workbench.Domain;
 using Workbench.Domain.Entities;
+using Workbench.Domain.Enums;
 using Workbench.Domain.Interfaces;
 
 namespace Workbench.Application.Services;
@@ -9,15 +10,21 @@ namespace Workbench.Application.Services;
 public class ProjectService : IProjectService
 {
     private readonly IProjectRepository _projects;
+    private readonly IProjectMemberRepository _members;
+    private readonly IProjectAccess _access;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUser _currentUser;
 
     public ProjectService(
         IProjectRepository projects,
+        IProjectMemberRepository members,
+        IProjectAccess access,
         IUnitOfWork unitOfWork,
         ICurrentUser currentUser)
     {
         _projects = projects;
+        _members = members;
+        _access = access;
         _unitOfWork = unitOfWork;
         _currentUser = currentUser;
     }
@@ -27,15 +34,24 @@ public class ProjectService : IProjectService
     {
         var projects = await _projects.ListOrderedByKeyAsync(cancellationToken);
         var issueCounts = await _projects.GetIssueCountsAsync(cancellationToken);
+        var permissions = await _access.GetManyAsync(
+            [.. projects.Select(p => p.Id)], cancellationToken);
 
         return projects
-            .Select(p => new ProjectListItem(
-                p.Id,
-                p.Key,
-                p.Name,
-                p.Description,
-                issueCounts.GetValueOrDefault(p.Id),
-                p.CreatedAt))
+            .Select(p =>
+            {
+                var access = permissions.GetValueOrDefault(p.Id, ProjectPermissions.None);
+
+                return new ProjectListItem(
+                    p.Id,
+                    p.Key,
+                    p.Name,
+                    p.Description,
+                    issueCounts.GetValueOrDefault(p.Id),
+                    p.CreatedAt,
+                    access.CanAdminister,
+                    access.IsOpenProject);
+            })
             .ToList();
     }
 
@@ -72,6 +88,13 @@ public class ProjectService : IProjectService
         };
 
         await _projects.AddAsync(project, cancellationToken);
+
+        // 만든 사람을 관리자로 함께 등록한다. 이렇게 해야 새 프로젝트가 "구성원 없음 = 열림"
+        // 상태로 태어나지 않고, 처음부터 책임자가 분명해진다.
+        await _members.AddAsync(
+            new ProjectMember { ProjectId = project.Id, UserId = user.Id, Role = ProjectRole.Admin },
+            cancellationToken);
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return OperationResult<Guid>.Success(project.Id);
@@ -86,6 +109,11 @@ public class ProjectService : IProjectService
         if (project is null)
         {
             return OperationResult.Failure("프로젝트를 찾을 수 없습니다.");
+        }
+
+        if (!(await _access.GetAsync(id, cancellationToken)).CanAdminister)
+        {
+            return OperationResult.Failure("이 프로젝트를 수정할 권한이 없습니다.");
         }
 
         // 키는 만든 뒤 바꿀 수 없다. Issue.Key 가 "DEV-123" 으로 비정규화돼 있어서,
@@ -120,6 +148,11 @@ public class ProjectService : IProjectService
         if (project is null)
         {
             return OperationResult.Failure("프로젝트를 찾을 수 없습니다.");
+        }
+
+        if (!(await _access.GetAsync(id, cancellationToken)).CanAdminister)
+        {
+            return OperationResult.Failure("이 프로젝트를 삭제할 권한이 없습니다.");
         }
 
         // 이슈는 CASCADE 로 함께 지워진다(페이지는 연결만 끊긴다). 되돌릴 수 없으므로

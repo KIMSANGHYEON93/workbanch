@@ -9,7 +9,9 @@ public sealed record ProjectListItem(
     string Name,
     string? Description,
     int IssueCount,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool CanAdminister,
+    bool IsOpenProject);
 
 public sealed record ProjectDetail(
     Guid Id,

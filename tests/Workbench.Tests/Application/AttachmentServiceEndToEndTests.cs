@@ -32,29 +32,10 @@ public sealed class AttachmentServiceEndToEndTests : IDisposable
     public AttachmentServiceEndToEndTests()
     {
         _dbContext = _database.Context;
-
-        var currentUser = new FakeCurrentUser();
-        var projectRepository = new ProjectRepository(_dbContext);
-        var issueRepository = new IssueRepository(_dbContext);
-
-        _projects = new ProjectService(projectRepository, _dbContext, currentUser);
-        _issues = new IssueService(
-            issueRepository,
-            projectRepository,
-            new AppUserRepository(_dbContext),
-            _dbContext,
-            currentUser,
-            NullLogger<IssueService>.Instance);
-
-        _attachments = new AttachmentService(
-            new AttachmentRepository(_dbContext),
-            issueRepository,
-            new PageRepository(_dbContext),
-            new LocalFileStorage(Options.Create(new FileStorageOptions { LocalRoot = _storageRoot })),
-            _dbContext,
-            currentUser,
-            Options.Create(new AttachmentOptions()),
-            NullLogger<AttachmentService>.Instance);
+        _projects = _database.Projects;
+        _issues = _database.Issues;
+        _attachments = _database.CreateAttachmentService(
+            new LocalFileStorage(Options.Create(new FileStorageOptions { LocalRoot = _storageRoot })));
     }
 
     [Fact]
