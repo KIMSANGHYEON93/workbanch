@@ -58,15 +58,7 @@ else
     <div class="row g-4">
         <div class="col-lg-8">
             <h2 class="h6 text-muted">설명</h2>
-            @if (string.IsNullOrWhiteSpace(_issue.DescriptionMarkdown))
-            {
-                <p class="text-muted">설명이 없습니다.</p>
-            }
-            else
-            {
-                @* 마크다운 렌더링은 7단계에서 붙인다. 그때까지는 원문을 그대로 보여준다. *@
-                <pre class="border rounded p-3 bg-light"><code>@_issue.DescriptionMarkdown</code></pre>
-            }
+            <MarkdownView Markdown="_issue.DescriptionMarkdown" EmptyText="설명이 없습니다." />
         </div>
 
         <div class="col-lg-4">

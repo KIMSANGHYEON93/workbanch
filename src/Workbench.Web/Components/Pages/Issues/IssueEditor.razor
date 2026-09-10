@@ -126,9 +126,9 @@ else
             </div>
 
             <div class="col-12">
-                <label class="form-label" for="issue-description">설명 (마크다운)</label>
-                <InputTextArea id="issue-description" class="form-control font-monospace" rows="10"
-                               @bind-Value="_model.DescriptionMarkdown" />
+                <label class="form-label" for="issue-description">설명</label>
+                <MarkdownEditor Id="issue-description" @bind-Value="_model.DescriptionMarkdown"
+                                Placeholder="재현 절차·기대 동작·로그 등을 마크다운으로 적으세요." />
             </div>
         </div>
 
