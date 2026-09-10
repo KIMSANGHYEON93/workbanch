@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Workbench.Application.Interfaces;
 using Workbench.Domain.Interfaces;
 using Workbench.Infrastructure.Data;
+using Workbench.Infrastructure.Identity;
 using Workbench.Infrastructure.Repositories;
 
 namespace Workbench.Infrastructure;
@@ -35,6 +37,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<WorkbenchDbContext>());
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped<IUserProvisioner, UserProvisioner>();
 
         return services;
     }

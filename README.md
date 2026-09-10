@@ -18,7 +18,7 @@
 | 1 | 솔루션 · 프로젝트 생성 + 기본 설정 | ✅ 완료 |
 | 2 | Domain 엔티티 + Enum | ✅ 완료 |
 | 3 | Infrastructure: DbContext + EF Core 마이그레이션 | ✅ 완료 |
-| 4 | 인증 (Entra ID) 연동 + 개발용 우회 | ⬜ |
+| 4 | 인증 (Entra ID) 연동 + 개발용 우회 | ✅ 완료 |
 | 5 | Project CRUD | ⬜ |
 | 6 | Issue CRUD + 상태 변경 + 리스트 | ⬜ |
 | 7 | 마크다운 에디터 컴포넌트 | ⬜ |
@@ -102,6 +102,20 @@ Blazor Server 의 DI 스코프는 **회로(circuit) 수명**과 같아서, 순�
 | 프로젝트를 지워도 지식 문서는 남는다 | `Pages.ProjectId` FK 는 `SET NULL` |
 | 페이지 계층은 CASCADE 금지 | SQL Server 는 자기참조 CASCADE 를 만들 수 없다 — `NO ACTION` |
 
+### ⚠ LocalDB 는 Windows 전용
+
+`appsettings.Development.json` 의 기본 접속 문자열은 LocalDB 다. Linux/macOS 개발자는
+`PlatformNotSupportedException: LocalDB is not supported on this platform` 을 만나므로,
+User Secrets 또는 환경변수로 덮어쓴다.
+
+```bash
+# 예: 로컬 Docker SQL Server
+export ConnectionStrings__Workbench="Server=localhost,1433;Database=Workbench;User Id=sa;Password=<암호>;Encrypt=False;TrustServerCertificate=True"
+```
+
+이 예외는 **의도적으로 흡수하지 않는다** — 일시적 장애가 아니라 설정 오류이므로 조용히 넘어가면
+"DB 가 있는 줄 알았는데 아무것도 저장되지 않는" 상태가 된다.
+
 ### 마이그레이션 명령
 
 ```bash
@@ -164,6 +178,43 @@ dotnet user-secrets set "ConnectionStrings:Workbench" "<값>" --project src/Work
 
 ---
 
+## 인증 (4단계)
+
+두 가지 모드가 있고 `Authentication:Mode` 로 고른다.
+
+| 모드 | 동작 | 용도 |
+|---|---|---|
+| `EntraId` (기본값) | Microsoft Entra ID OpenID Connect. `/MicrosoftIdentity/Account/*` 로그인 엔드포인트 제공 | 운영 |
+| `Development` | 고정 사용자로 **항상 로그인된 상태**. Entra 앱 등록 없이 개발 가능 | 로컬 개발 전용 |
+
+### 개발용 우회는 운영에서 기동을 막는다
+
+`Mode=Development` 인데 호스트 환경이 Development 가 아니면 `AddWorkbenchAuthentication` 이
+**예외를 던져 앱이 뜨지 않는다.** 개발용 우회는 "아무나 로그인된 상태"와 같아서, 설정 실수로
+운영에 켜지면 조용히 인증 없는 서비스가 되기 때문이다.
+
+같은 이유로 **설정이 비어 있으면 `EntraId` 가 기본값**이다 — 설정 누락이 인증 우회로 해석되면 안 된다.
+
+### 사용자 식별과 프로비저닝
+
+- 사용자 Id 는 Entra **Object Id**(`oid`)다. 메일 주소와 달리 바뀌지 않는다.
+- Object Id 가 없거나 GUID 가 아니면 **미인증으로 떨어뜨린다(fail-closed)** — 추측한 Id 로 프로비저닝하면
+  담당자·작성자 이력이 다른 사람에게 붙는다.
+- 클레임 → 사용자 변환은 `WorkbenchClaims.ToCurrentUser` **한 곳**에서만 한다. 미들웨어(HttpContext)와
+  회로(`AuthenticationStateProvider`)가 같은 규칙을 써야 "프로비저닝된 사용자"와 "화면이 보는 사용자"가
+  갈라지지 않는다.
+- 로그인한 사용자는 최초 문서 요청에서 `Users` 테이블에 반영된다(10분 억제 캐시).
+
+### 프로비저닝은 렌더의 전제조건이 아니다
+
+DB 장애 시 `EnsureProvisionedAsync` 는 **예외를 던지지 않고 `false` 를 돌려준다.**
+그렇지 않으면 DB 가 잠깐 죽었을 때 **모든 화면이 500** 이 된다(로그인 화면 포함).
+실패는 캐시하지 않으므로 DB 가 돌아오면 다음 요청에서 곧바로 다시 시도한다.
+
+실측: DB 를 못 여는 상태에서 `GET /` → **HTTP 200**, 경고 1줄, 미처리 예외 0건.
+
+---
+
 ## 코딩 규칙
 
 - C# 최신 문법 (`record`, `required`, nullable reference types)
@@ -172,3 +223,5 @@ dotnet user-secrets set "ConnectionStrings:Workbench" "<값>" --project src/Work
 - 주석은 **"왜"** 만 남긴다. 자명한 코드에는 주석을 달지 않는다
 - Blazor 컴포넌트는 작게 유지, `DbContext` 는 Scoped 등록
 - nullable 경고는 빌드 오류로 처리한다 (`Directory.Build.props`)
+- NuGet 감사가 켜져 있다(`NuGetAuditMode=all`). **high/critical(NU1903/NU1904) 은 빌드 오류**,
+  moderate 이하는 경고. 당장 고칠 수 없으면 해당 프로젝트에서 `<NoWarn>` 로 한시 해제하되 이유를 커밋에 남긴다

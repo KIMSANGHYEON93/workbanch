@@ -94,3 +94,19 @@ main {
         right: 0.75rem;
         top: 0.5rem;
     }
+
+.user-display {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.2;
+}
+
+.user-display-name {
+    font-weight: 600;
+}
+
+.user-display-email {
+    font-size: 0.75rem;
+    color: #6c757d;
+}

@@ -5,10 +5,17 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- Nullability mistakes break at build time; other warnings stay warnings so a
-         template/tooling upgrade cannot block the whole team's build. -->
+    <!-- nullable 실수는 빌드에서 막고, 나머지 경고는 경고로 둔다 —
+         템플릿/툴링 업그레이드가 팀 전체 빌드를 세우지 않게 하기 위함. -->
     <WarningsAsErrors>nullable</WarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- 취약점이 알려진 패키지를 조용히 들이지 않는다. 중간 등급(NU1902)은 경고로 두고
+         높음/심각(NU1903/NU1904)만 빌드를 막는다 — 당장 고칠 수 없는 상황이라면
+         해당 프로젝트에서 <NoWarn> 로 한시적으로 풀되, 이유를 커밋 메시지에 남길 것. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
   </PropertyGroup>
 

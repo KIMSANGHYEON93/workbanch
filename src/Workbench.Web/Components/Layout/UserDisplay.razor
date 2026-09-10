@@ -1,0 +1,24 @@
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@inject ICurrentUser CurrentUser
+
+<div class="user-display">
+    @if (_user.IsAuthenticated)
+    {
+        <span class="user-display-name">@_user.DisplayName</span>
+        <span class="user-display-email">@_user.Email</span>
+    }
+    else
+    {
+        <span class="user-display-name">로그인되지 않음</span>
+    }
+</div>
+
+@code {
+    private CurrentUserInfo _user = CurrentUserInfo.Anonymous;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await CurrentUser.GetAsync();
+    }
+}
