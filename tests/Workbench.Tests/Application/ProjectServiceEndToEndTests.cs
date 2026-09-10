@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.DTOs;
 using Workbench.Application.Services;
@@ -6,6 +5,7 @@ using Workbench.Domain.Entities;
 using Workbench.Infrastructure.Data;
 using Workbench.Infrastructure.Repositories;
 using Workbench.Tests.Fakes;
+using Workbench.Tests.Infrastructure;
 
 namespace Workbench.Tests.Application;
 
@@ -15,26 +15,13 @@ namespace Workbench.Tests.Application;
 /// </summary>
 public sealed class ProjectServiceEndToEndTests : IDisposable
 {
-    private readonly SqliteConnection _connection;
+    private readonly SqliteTestDatabase _database = new();
     private readonly WorkbenchDbContext _dbContext;
     private readonly ProjectService _service;
 
     public ProjectServiceEndToEndTests()
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
-
-        _dbContext = new WorkbenchDbContext(
-            new DbContextOptionsBuilder<WorkbenchDbContext>().UseSqlite(_connection).Options);
-        _dbContext.Database.EnsureCreated();
-
-        _dbContext.Users.Add(new AppUser
-        {
-            Id = FakeCurrentUser.DefaultUserId,
-            DisplayName = "홍길동",
-            Email = "gildong@example.com",
-        });
-        _dbContext.SaveChanges();
+        _dbContext = _database.Context;
 
         _service = new ProjectService(
             new ProjectRepository(_dbContext),
@@ -103,9 +90,5 @@ public sealed class ProjectServiceEndToEndTests : IDisposable
         Assert.Equal(1, await _dbContext.Projects.CountAsync());
     }
 
-    public void Dispose()
-    {
-        _dbContext.Dispose();
-        _connection.Dispose();
-    }
+    public void Dispose() => _database.Dispose();
 }

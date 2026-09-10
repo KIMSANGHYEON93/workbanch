@@ -1,0 +1,239 @@
+@page "/issues/new"
+@page "/issues/{Key}/edit"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@using Workbench.Domain.Enums
+@using Workbench.Web.Services
+@inject IIssueService IssueService
+@inject IProjectService ProjectService
+@inject NavigationManager Navigation
+
+<PageTitle>@Title · Workbench</PageTitle>
+
+<h1 class="h3 mb-3">@Title</h1>
+
+@if (_notFound)
+{
+    <div class="alert alert-warning" role="alert">
+        이슈를 찾을 수 없습니다. <a href="/issues">목록으로 돌아가기</a>
+    </div>
+}
+else if (!IsEditing && _projects.Count == 0 && _errors.Count == 0)
+{
+    <div class="alert alert-info" role="alert">
+        먼저 프로젝트를 만들어야 이슈를 등록할 수 있습니다. <a href="/projects/new">프로젝트 만들기</a>
+    </div>
+}
+else
+{
+    @if (_errors.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <ul class="mb-0">
+                @foreach (var error in _errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <EditForm Model="_model" OnValidSubmit="SubmitAsync" FormName="issue-editor">
+        <DataAnnotationsValidator />
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="issue-project">프로젝트</label>
+                <InputSelect id="issue-project" class="form-select" @bind-Value="_model.ProjectId"
+                             disabled="@IsEditing">
+                    <option value="@Guid.Empty">선택하세요</option>
+                    @foreach (var project in _projects)
+                    {
+                        <option value="@project.Id">@project.Key · @project.Name</option>
+                    }
+                </InputSelect>
+                @if (IsEditing)
+                {
+                    <div class="form-text">이슈 키(@_key)가 이 프로젝트에 묶여 있어 옮길 수 없습니다.</div>
+                }
+                <ValidationMessage For="() => _model.ProjectId" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label" for="issue-title">제목</label>
+                <InputText id="issue-title" class="form-control" @bind-Value="_model.Title" />
+                <ValidationMessage For="() => _model.Title" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label" for="issue-type">유형</label>
+                <InputSelect id="issue-type" class="form-select" @bind-Value="_model.Type">
+                    @foreach (var type in Enum.GetValues<IssueType>())
+                    {
+                        <option value="@type">@IssueDisplay.Label(type)</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label" for="issue-status">상태</label>
+                <InputSelect id="issue-status" class="form-select" @bind-Value="_model.Status">
+                    @foreach (var status in Enum.GetValues<IssueStatus>())
+                    {
+                        <option value="@status">@IssueDisplay.Label(status)</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label" for="issue-priority">우선순위</label>
+                <InputSelect id="issue-priority" class="form-select" @bind-Value="_model.Priority">
+                    @foreach (var priority in Enum.GetValues<IssuePriority>())
+                    {
+                        <option value="@priority">@IssueDisplay.Label(priority)</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label" for="issue-assignee">담당자</label>
+                <InputSelect id="issue-assignee" class="form-select" @bind-Value="_model.AssigneeId">
+                    <option value="">미지정</option>
+                    @foreach (var user in _assignees)
+                    {
+                        <option value="@user.Id">@user.DisplayName</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" for="issue-environment">배포 환경</label>
+                <InputText id="issue-environment" class="form-control" @bind-Value="_model.Environment"
+                           placeholder="예: DEV, STG, PRD" />
+                <ValidationMessage For="() => _model.Environment" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" for="issue-version">버전</label>
+                <InputText id="issue-version" class="form-control" @bind-Value="_model.Version"
+                           placeholder="예: 1.2.0" />
+                <ValidationMessage For="() => _model.Version" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label" for="issue-due">기한</label>
+                <InputDate id="issue-due" class="form-control" @bind-Value="_model.DueDate" />
+            </div>
+
+            <div class="col-12">
+                <label class="form-label" for="issue-description">설명 (마크다운)</label>
+                <InputTextArea id="issue-description" class="form-control font-monospace" rows="10"
+                               @bind-Value="_model.DescriptionMarkdown" />
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
+                @(_saving ? "저장 중…" : "저장")
+            </button>
+            <a class="btn btn-outline-secondary" href="@CancelHref">취소</a>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public string? Key { get; set; }
+
+    private readonly IssueEditModel _model = new();
+    private IReadOnlyList<ProjectListItem> _projects = [];
+    private IReadOnlyList<UserOption> _assignees = [];
+    private List<string> _errors = [];
+    private Guid _issueId;
+    private string _key = string.Empty;
+    private bool _notFound;
+    private bool _saving;
+
+    private bool IsEditing => !string.IsNullOrWhiteSpace(Key);
+
+    private string Title => IsEditing ? $"{_key} 수정" : "새 이슈";
+
+    private string CancelHref => IsEditing ? $"/issues/{_key}" : "/issues";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = await ProjectService.ListAsync();
+            _assignees = await IssueService.ListAssigneeOptionsAsync();
+
+            if (!IsEditing)
+            {
+                return;
+            }
+
+            var issue = await IssueService.GetByKeyAsync(Key!);
+            if (issue is null)
+            {
+                _notFound = true;
+                return;
+            }
+
+            _issueId = issue.Id;
+            _key = issue.Key;
+            _model.ProjectId = issue.ProjectId;
+            _model.Title = issue.Title;
+            _model.DescriptionMarkdown = issue.DescriptionMarkdown;
+            _model.Type = issue.Type;
+            _model.Status = issue.Status;
+            _model.Priority = issue.Priority;
+            _model.AssigneeId = issue.AssigneeId;
+            _model.DueDate = issue.DueDate;
+            _model.Environment = issue.Environment;
+            _model.Version = issue.Version;
+        }
+        catch (Exception)
+        {
+            _errors = ["화면을 준비하지 못했습니다. 데이터베이스 연결을 확인하세요."];
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            if (IsEditing)
+            {
+                var updated = await IssueService.UpdateAsync(_issueId, _model);
+                if (!updated.Succeeded)
+                {
+                    _errors = [.. updated.Errors];
+                    return;
+                }
+
+                Navigation.NavigateTo($"/issues/{_key}");
+                return;
+            }
+
+            var created = await IssueService.CreateAsync(_model);
+            if (!created.Succeeded)
+            {
+                _errors = [.. created.Errors];
+                return;
+            }
+
+            Navigation.NavigateTo($"/issues/{created.Value}");
+        }
+        catch (Exception)
+        {
+            _errors = ["저장하지 못했습니다. 데이터베이스 연결을 확인하세요."];
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -1,0 +1,187 @@
+@page "/issues/{Key}"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@using Workbench.Domain.Enums
+@using Workbench.Web.Services
+@inject IIssueService IssueService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_issue?.Key ?? "이슈") · Workbench</PageTitle>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger" role="alert">@_loadError</div>
+}
+else if (_notFound)
+{
+    <div class="alert alert-warning" role="alert">
+        이슈를 찾을 수 없습니다. <a href="/issues">목록으로 돌아가기</a>
+    </div>
+}
+else if (_issue is null)
+{
+    <p class="text-muted">불러오는 중…</p>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <div class="text-muted small">
+                <a href="@($"/issues?projectId={_issue.ProjectId}")">@_issue.ProjectKey · @_issue.ProjectName</a>
+            </div>
+            <h1 class="h3 mb-0">
+                <span class="badge text-bg-secondary align-middle">@_issue.Key</span>
+                @_issue.Title
+            </h1>
+        </div>
+        <div class="text-nowrap">
+            <a class="btn btn-sm btn-outline-secondary" href="@($"/issues/{_issue.Key}/edit")">수정</a>
+            @if (_confirmingDelete)
+            {
+                <button type="button" class="btn btn-sm btn-danger" @onclick="DeleteAsync">삭제 확인</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        @onclick="() => _confirmingDelete = false">취소</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        @onclick="() => _confirmingDelete = true">삭제</button>
+            }
+        </div>
+    </div>
+
+    @if (_actionError is not null)
+    {
+        <div class="alert alert-warning" role="alert">@_actionError</div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <h2 class="h6 text-muted">설명</h2>
+            @if (string.IsNullOrWhiteSpace(_issue.DescriptionMarkdown))
+            {
+                <p class="text-muted">설명이 없습니다.</p>
+            }
+            else
+            {
+                @* 마크다운 렌더링은 7단계에서 붙인다. 그때까지는 원문을 그대로 보여준다. *@
+                <pre class="border rounded p-3 bg-light"><code>@_issue.DescriptionMarkdown</code></pre>
+            }
+        </div>
+
+        <div class="col-lg-4">
+            <dl class="row mb-0">
+                <dt class="col-5">상태</dt>
+                <dd class="col-7">
+                    <select class="form-select form-select-sm" value="@_issue.Status"
+                            @onchange="OnStatusChangedAsync" aria-label="상태 변경">
+                        @foreach (var status in Enum.GetValues<IssueStatus>())
+                        {
+                            <option value="@status" selected="@(status == _issue.Status)">
+                                @IssueDisplay.Label(status)
+                            </option>
+                        }
+                    </select>
+                </dd>
+
+                <dt class="col-5">유형</dt>
+                <dd class="col-7">@IssueDisplay.Label(_issue.Type)</dd>
+
+                <dt class="col-5">우선순위</dt>
+                <dd class="col-7">
+                    <span class="badge @IssueDisplay.BadgeClass(_issue.Priority)">
+                        @IssueDisplay.Label(_issue.Priority)
+                    </span>
+                </dd>
+
+                <dt class="col-5">담당자</dt>
+                <dd class="col-7">@(_issue.AssigneeName ?? "미지정")</dd>
+
+                <dt class="col-5">보고자</dt>
+                <dd class="col-7">@(_issue.ReporterName ?? "—")</dd>
+
+                <dt class="col-5">기한</dt>
+                <dd class="col-7">@(_issue.DueDate?.ToString("yyyy-MM-dd") ?? "—")</dd>
+
+                <dt class="col-5">배포 환경</dt>
+                <dd class="col-7">@(_issue.Environment ?? "—")</dd>
+
+                <dt class="col-5">버전</dt>
+                <dd class="col-7">@(_issue.Version ?? "—")</dd>
+
+                <dt class="col-5">등록</dt>
+                <dd class="col-7">@_issue.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</dd>
+
+                <dt class="col-5">수정</dt>
+                <dd class="col-7">@_issue.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</dd>
+            </dl>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Key { get; set; } = string.Empty;
+
+    private IssueDetail? _issue;
+    private string? _loadError;
+    private string? _actionError;
+    private bool _notFound;
+    private bool _confirmingDelete;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+        _notFound = false;
+
+        try
+        {
+            _issue = await IssueService.GetByKeyAsync(Key);
+            _notFound = _issue is null;
+        }
+        catch (Exception)
+        {
+            _loadError = "이슈를 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+    }
+
+    private async Task OnStatusChangedAsync(ChangeEventArgs args)
+    {
+        if (_issue is null || !Enum.TryParse<IssueStatus>(args.Value?.ToString(), out var status))
+        {
+            return;
+        }
+
+        _actionError = null;
+
+        var result = await IssueService.ChangeStatusAsync(_issue.Id, status);
+        if (!result.Succeeded)
+        {
+            _actionError = string.Join(" ", result.Errors);
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_issue is null)
+        {
+            return;
+        }
+
+        _confirmingDelete = false;
+        _actionError = null;
+
+        var result = await IssueService.DeleteAsync(_issue.Id);
+        if (!result.Succeeded)
+        {
+            _actionError = string.Join(" ", result.Errors);
+            return;
+        }
+
+        Navigation.NavigateTo("/issues");
+    }
+}

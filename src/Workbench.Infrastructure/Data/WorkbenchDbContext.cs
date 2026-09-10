@@ -11,6 +11,15 @@ public class WorkbenchDbContext : DbContext, IUnitOfWork
     {
     }
 
+    /// <summary>
+    /// 파생 컨텍스트용. 테스트 하네스가 다른 프로바이더에 맞춘 규약을 얹으려면 자기 옵션 타입이
+    /// 필요한데, 그 사정 때문에 운영 코드가 그 프로바이더를 알 필요는 없다.
+    /// </summary>
+    protected WorkbenchDbContext(DbContextOptions options)
+        : base(options)
+    {
+    }
+
     public DbSet<AppUser> Users => Set<AppUser>();
 
     public DbSet<Project> Projects => Set<Project>();

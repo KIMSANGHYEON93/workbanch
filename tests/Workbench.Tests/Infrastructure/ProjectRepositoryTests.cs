@@ -1,4 +1,3 @@
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Workbench.Domain.Entities;
 using Workbench.Infrastructure.Data;
@@ -14,21 +13,13 @@ namespace Workbench.Tests.Infrastructure;
 /// </summary>
 public sealed class ProjectRepositoryTests : IDisposable
 {
-    private readonly SqliteConnection _connection;
+    private readonly SqliteTestDatabase _database = new();
     private readonly WorkbenchDbContext _dbContext;
     private readonly ProjectRepository _repository;
 
     public ProjectRepositoryTests()
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
-
-        var options = new DbContextOptionsBuilder<WorkbenchDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _dbContext = new WorkbenchDbContext(options);
-        _dbContext.Database.EnsureCreated();
+        _dbContext = _database.Context;
         _repository = new ProjectRepository(_dbContext);
     }
 
@@ -96,11 +87,7 @@ public sealed class ProjectRepositoryTests : IDisposable
         await Assert.ThrowsAsync<DbUpdateException>(() => _dbContext.SaveChangesAsync());
     }
 
-    public void Dispose()
-    {
-        _dbContext.Dispose();
-        _connection.Dispose();
-    }
+    public void Dispose() => _database.Dispose();
 
     private async Task<Project> SeedProjectAsync(string key, string name)
     {
