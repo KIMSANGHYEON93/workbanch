@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Workbench.Application\Workbench.Application.csproj" />
+  </ItemGroup>
+
+</Project>
