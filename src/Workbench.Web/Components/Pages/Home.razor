@@ -1,0 +1,44 @@
+@page "/"
+
+<PageTitle>Workbench</PageTitle>
+
+<h1>Workbench</h1>
+
+<p class="lead">내부 이슈 추적 + 마크다운 지식 저장소.</p>
+
+<div class="row g-3 mt-1">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 card-title">이슈</h2>
+                <p class="card-text text-muted">
+                    끝이 있는 일. 상태·담당자·우선순위를 갖고 <code>WB-12</code> 같은 키로 불린다.
+                </p>
+                <a class="btn btn-sm btn-outline-primary" href="/issues">목록</a>
+                <a class="btn btn-sm btn-outline-secondary" href="/board">보드</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 card-title">페이지</h2>
+                <p class="card-text text-muted">
+                    끝이 없는 지식. 계층으로 쌓고 마크다운으로 계속 고쳐 쓴다.
+                </p>
+                <a class="btn btn-sm btn-outline-primary" href="/pages">목록</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 card-title">프로젝트</h2>
+                <p class="card-text text-muted">
+                    이슈 키의 접두어이자 권한의 단위. 구성원이 없는 프로젝트는 모두에게 열려 있다.
+                </p>
+                <a class="btn btn-sm btn-outline-primary" href="/projects">목록</a>
+            </div>
+        </div>
+    </div>
+</div>

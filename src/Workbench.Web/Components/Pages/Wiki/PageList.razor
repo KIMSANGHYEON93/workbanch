@@ -1,0 +1,96 @@
+@page "/pages"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@inject IPageService PageService
+
+<PageTitle>페이지 · Workbench</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">페이지</h1>
+    <a class="btn btn-primary" href="/pages/new">새 페이지</a>
+</div>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger" role="alert">@_loadError</div>
+}
+else
+{
+    <div class="mb-3">
+        <input class="form-control" placeholder="제목 또는 본문으로 검색" @bind="_search"
+               @bind:after="LoadAsync" aria-label="검색" />
+    </div>
+
+    @if (_pages is null)
+    {
+        <p class="text-muted">불러오는 중…</p>
+    }
+    else if (_pages.Count == 0)
+    {
+        <div class="alert alert-info" role="alert">
+            @(_searching ? "검색 결과가 없습니다." : "아직 페이지가 없습니다.")
+            @if (!_searching)
+            {
+                <a href="/pages/new">첫 페이지를 만드세요.</a>
+            }
+        </div>
+    }
+    else
+    {
+        @if (_searching)
+        {
+            <p class="text-muted small">검색 결과는 계층 없이 평평하게 보여줍니다.</p>
+        }
+
+        <ul class="list-group">
+            @foreach (var node in _pages)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span style="padding-left: @(node.Depth * 1.5)rem">
+                        @if (node.Depth > 0)
+                        {
+                            <span class="text-muted me-1">└</span>
+                        }
+                        <a href="@($"/pages/{node.Slug}")">@node.Title</a>
+                        @if (!node.IsPublished)
+                        {
+                            <span class="badge bg-warning text-dark ms-2">비공개</span>
+                        }
+                        @if (node.ProjectKey is not null)
+                        {
+                            <span class="badge bg-light text-dark ms-2">@node.ProjectKey</span>
+                        }
+                    </span>
+                    <span class="text-muted small">@node.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private IReadOnlyList<PageTreeItem>? _pages;
+    private string _search = string.Empty;
+    private string? _loadError;
+
+    private bool _searching;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+        _searching = !string.IsNullOrWhiteSpace(_search);
+
+        try
+        {
+            _pages = _searching
+                ? await PageService.SearchAsync(_search)
+                : await PageService.ListTreeAsync();
+        }
+        catch (Exception)
+        {
+            _loadError = "페이지 목록을 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+    }
+}

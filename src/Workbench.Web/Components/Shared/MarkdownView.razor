@@ -1,0 +1,19 @@
+@using Workbench.Web.Services
+@inject MarkdownRenderer Renderer
+
+@if (string.IsNullOrWhiteSpace(Markdown))
+{
+    <p class="text-muted mb-0">@EmptyText</p>
+}
+else
+{
+    <div class="markdown-body">@Renderer.ToHtml(Markdown)</div>
+}
+
+@code {
+    [Parameter]
+    public string? Markdown { get; set; }
+
+    [Parameter]
+    public string EmptyText { get; set; } = "내용이 없습니다.";
+}

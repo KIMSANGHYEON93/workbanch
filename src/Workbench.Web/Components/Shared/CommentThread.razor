@@ -1,0 +1,133 @@
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@inject ICommentService CommentService
+
+<section class="comment-thread mt-4">
+    <h2 class="h6 text-muted">댓글 @(_comments is null ? "" : $"({_comments.Count})")</h2>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-warning" role="alert">@_error</div>
+    }
+
+    @if (_comments is null)
+    {
+        <p class="text-muted">불러오는 중…</p>
+    }
+    else
+    {
+        @if (_comments.Count == 0)
+        {
+            <p class="text-muted">아직 댓글이 없습니다.</p>
+        }
+        else
+        {
+            <ul class="list-unstyled">
+                @foreach (var comment in _comments)
+                {
+                    <li class="border rounded p-3 mb-2">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span class="fw-semibold">@(comment.AuthorName ?? "알 수 없는 사용자")</span>
+                            <span class="text-muted small">
+                                @comment.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                @if (comment.CanDelete)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2"
+                                            @onclick="() => DeleteAsync(comment.Id)">삭제</button>
+                                }
+                            </span>
+                        </div>
+                        <MarkdownView Markdown="@comment.ContentMarkdown" EmptyText="(빈 댓글)" />
+                    </li>
+                }
+            </ul>
+        }
+
+        <div class="mt-3">
+            <MarkdownEditor @bind-Value="_draft" Rows="5" Placeholder="댓글을 마크다운으로 작성하세요." />
+            <button type="button" class="btn btn-primary mt-2" disabled="@_posting" @onclick="PostAsync">
+                @(_posting ? "등록 중…" : "댓글 등록")
+            </button>
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>이슈에 달 때 지정. <see cref="PageId"/> 와 동시에 지정하지 않는다.</summary>
+    [Parameter]
+    public Guid? IssueId { get; set; }
+
+    [Parameter]
+    public Guid? PageId { get; set; }
+
+    private IReadOnlyList<CommentItem>? _comments;
+    private string? _draft;
+    private string? _error;
+    private bool _posting;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+
+        try
+        {
+            _comments = IssueId is { } issueId
+                ? await CommentService.ListForIssueAsync(issueId)
+                : PageId is { } pageId
+                    ? await CommentService.ListForPageAsync(pageId)
+                    : [];
+        }
+        catch (Exception)
+        {
+            _error = "댓글을 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+            _comments = [];
+        }
+    }
+
+    private async Task PostAsync()
+    {
+        _posting = true;
+        _error = null;
+
+        try
+        {
+            var result = IssueId is { } issueId
+                ? await CommentService.AddToIssueAsync(issueId, _draft)
+                : PageId is { } pageId
+                    ? await CommentService.AddToPageAsync(pageId, _draft)
+                    : Workbench.Application.DTOs.OperationResult.Failure("댓글을 달 대상이 없습니다.");
+
+            if (!result.Succeeded)
+            {
+                _error = string.Join(" ", result.Errors);
+                return;
+            }
+
+            _draft = null;
+            await LoadAsync();
+        }
+        catch (Exception)
+        {
+            _error = "댓글을 등록하지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+        finally
+        {
+            _posting = false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid commentId)
+    {
+        _error = null;
+
+        var result = await CommentService.DeleteAsync(commentId);
+        if (!result.Succeeded)
+        {
+            _error = string.Join(" ", result.Errors);
+        }
+
+        await LoadAsync();
+    }
+}

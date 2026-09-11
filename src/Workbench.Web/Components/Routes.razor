@@ -1,0 +1,17 @@
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @* 전역 폴백 정책이 미인증 요청을 로그인으로 돌려보내므로, 여기까지 오는 것은
+                   인증은 됐지만 권한이 없는 경우다. *@
+                <div class="alert alert-warning m-3" role="alert">
+                    이 화면을 볼 권한이 없습니다. 프로젝트 관리자에게 접근 권한을 요청하세요.
+                </div>
+            </NotAuthorized>
+            <Authorizing>
+                <div class="m-3 text-muted">권한 확인 중…</div>
+            </Authorizing>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

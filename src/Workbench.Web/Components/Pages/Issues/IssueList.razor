@@ -1,0 +1,165 @@
+@page "/issues"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@using Workbench.Domain.Enums
+@using Workbench.Domain.Interfaces
+@using Workbench.Web.Services
+@inject IIssueService IssueService
+@inject IProjectService ProjectService
+
+<PageTitle>이슈 · Workbench</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">이슈</h1>
+    <a class="btn btn-primary" href="/issues/new">새 이슈</a>
+</div>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger" role="alert">@_loadError</div>
+}
+else
+{
+    <div class="row g-2 mb-3">
+        <div class="col-md-3">
+            <select class="form-select" @bind="_projectId" @bind:after="LoadAsync" aria-label="프로젝트">
+                <option value="@Guid.Empty">전체 프로젝트</option>
+                @foreach (var project in _projects)
+                {
+                    <option value="@project.Id">@project.Key · @project.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-select" @bind="_status" @bind:after="LoadAsync" aria-label="상태">
+                <option value="">전체 상태</option>
+                @foreach (var status in Enum.GetValues<IssueStatus>())
+                {
+                    <option value="@status">@IssueDisplay.Label(status)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="_assigneeId" @bind:after="LoadAsync" aria-label="담당자">
+                <option value="@Guid.Empty">전체 담당자</option>
+                @foreach (var user in _assignees)
+                {
+                    <option value="@user.Id">@user.DisplayName</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <input class="form-control" placeholder="제목 또는 키로 검색" @bind="_search"
+                   @bind:after="LoadAsync" aria-label="검색" />
+        </div>
+        <div class="col-md-1 d-flex align-items-center">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="include-closed"
+                       @bind="_includeClosed" @bind:after="LoadAsync" />
+                <label class="form-check-label small" for="include-closed">완료 포함</label>
+            </div>
+        </div>
+    </div>
+
+    @if (_issues is null)
+    {
+        <p class="text-muted">불러오는 중…</p>
+    }
+    else if (_issues.Count == 0)
+    {
+        <div class="alert alert-info" role="alert">조건에 맞는 이슈가 없습니다.</div>
+    }
+    else
+    {
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">키</th>
+                    <th scope="col">제목</th>
+                    <th scope="col">유형</th>
+                    <th scope="col">상태</th>
+                    <th scope="col">우선순위</th>
+                    <th scope="col">담당자</th>
+                    <th scope="col">환경 / 버전</th>
+                    <th scope="col">기한</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var issue in _issues)
+                {
+                    <tr>
+                        <td><a href="@($"/issues/{issue.Key}")">@issue.Key</a></td>
+                        <td>@issue.Title</td>
+                        <td>@IssueDisplay.Label(issue.Type)</td>
+                        <td>
+                            <span class="badge @IssueDisplay.BadgeClass(issue.Status)">
+                                @IssueDisplay.Label(issue.Status)
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge @IssueDisplay.BadgeClass(issue.Priority)">
+                                @IssueDisplay.Label(issue.Priority)
+                            </span>
+                        </td>
+                        <td>@(issue.AssigneeName ?? "—")</td>
+                        <td class="text-muted small">
+                            @(string.Join(" / ", new[] { issue.Environment, issue.Version }
+                                .Where(v => !string.IsNullOrWhiteSpace(v))))
+                        </td>
+                        <td>@(issue.DueDate?.ToString("yyyy-MM-dd") ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private IReadOnlyList<IssueListItem>? _issues;
+    private IReadOnlyList<ProjectListItem> _projects = [];
+    private IReadOnlyList<UserOption> _assignees = [];
+    private string? _loadError;
+
+    private Guid _projectId = Guid.Empty;
+    private Guid _assigneeId = Guid.Empty;
+    private string _status = string.Empty;
+    private string _search = string.Empty;
+    private bool _includeClosed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _projects = await ProjectService.ListAsync();
+            _assignees = await IssueService.ListAssigneeOptionsAsync();
+        }
+        catch (Exception)
+        {
+            _loadError = "화면을 준비하지 못했습니다. 데이터베이스 연결을 확인하세요.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+
+        var query = new IssueQuery(
+            ProjectId: _projectId == Guid.Empty ? null : _projectId,
+            Status: Enum.TryParse<IssueStatus>(_status, out var status) ? status : null,
+            AssigneeId: _assigneeId == Guid.Empty ? null : _assigneeId,
+            SearchText: string.IsNullOrWhiteSpace(_search) ? null : _search,
+            IncludeClosed: _includeClosed);
+
+        try
+        {
+            _issues = await IssueService.ListAsync(query);
+        }
+        catch (Exception)
+        {
+            _loadError = "이슈 목록을 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+    }
+}

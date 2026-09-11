@@ -1,0 +1,142 @@
+@page "/projects/new"
+@page "/projects/{Id:guid}/edit"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@inject IProjectService ProjectService
+@inject NavigationManager Navigation
+
+<PageTitle>@Title · Workbench</PageTitle>
+
+<h1 class="h3 mb-3">@Title</h1>
+
+@if (_notFound)
+{
+    <div class="alert alert-warning" role="alert">
+        프로젝트를 찾을 수 없습니다. <a href="/projects">목록으로 돌아가기</a>
+    </div>
+}
+else
+{
+    @if (_errors.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <ul class="mb-0">
+                @foreach (var error in _errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <EditForm Model="_model" OnValidSubmit="SubmitAsync" FormName="project-editor">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label" for="project-key">프로젝트 키</label>
+            <InputText id="project-key" class="form-control text-uppercase" @bind-Value="_model.Key"
+                       disabled="@IsEditing" />
+            <div class="form-text">
+                @if (IsEditing)
+                {
+                    <span>키는 생성 후 변경할 수 없습니다 — 이미 발급된 이슈 키(@_model.Key-1 …)가 이 값을 사용합니다.</span>
+                }
+                else
+                {
+                    <span>이슈 키의 접두어가 됩니다. 영문 대문자로 시작하는 2~10자 (예: DEV, DEPLOY).</span>
+                }
+            </div>
+            <ValidationMessage For="() => _model.Key" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="project-name">이름</label>
+            <InputText id="project-name" class="form-control" @bind-Value="_model.Name" />
+            <ValidationMessage For="() => _model.Name" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label" for="project-description">설명</label>
+            <InputTextArea id="project-description" class="form-control" rows="4"
+                           @bind-Value="_model.Description" />
+            <ValidationMessage For="() => _model.Description" />
+        </div>
+
+        <button type="submit" class="btn btn-primary" disabled="@_saving">
+            @(_saving ? "저장 중…" : "저장")
+        </button>
+        <a class="btn btn-outline-secondary" href="/projects">취소</a>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private readonly ProjectEditModel _model = new();
+    private List<string> _errors = [];
+    private bool _notFound;
+    private bool _saving;
+
+    private bool IsEditing => Id.HasValue;
+
+    private string Title => IsEditing ? "프로젝트 수정" : "새 프로젝트";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsEditing)
+        {
+            return;
+        }
+
+        ProjectDetail? project;
+        try
+        {
+            project = await ProjectService.GetAsync(Id!.Value);
+        }
+        catch (Exception)
+        {
+            _errors = ["프로젝트를 불러오지 못했습니다. 데이터베이스 연결을 확인하세요."];
+            return;
+        }
+
+        if (project is null)
+        {
+            _notFound = true;
+            return;
+        }
+
+        _model.Key = project.Key;
+        _model.Name = project.Name;
+        _model.Description = project.Description;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var result = IsEditing
+                ? await ProjectService.UpdateAsync(Id!.Value, _model)
+                : (OperationResult)await ProjectService.CreateAsync(_model);
+
+            if (!result.Succeeded)
+            {
+                _errors = [.. result.Errors];
+                return;
+            }
+
+            Navigation.NavigateTo("/projects");
+        }
+        catch (Exception)
+        {
+            _errors = ["저장하지 못했습니다. 데이터베이스 연결을 확인하세요."];
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

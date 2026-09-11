@@ -1,0 +1,63 @@
+@using Workbench.Web.Services
+
+<div class="markdown-editor">
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button type="button" class="nav-link @(_previewing ? "" : "active")"
+                    @onclick="() => _previewing = false" role="tab" aria-selected="@(!_previewing)">
+                작성
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button" class="nav-link @(_previewing ? "active" : "")"
+                    @onclick="() => _previewing = true" role="tab" aria-selected="@_previewing">
+                미리보기
+            </button>
+        </li>
+    </ul>
+
+    <div class="border border-top-0 rounded-bottom p-2">
+        @if (_previewing)
+        {
+            <div class="markdown-preview">
+                <MarkdownView Markdown="@Value" EmptyText="미리볼 내용이 없습니다." />
+            </div>
+        }
+        else
+        {
+            <textarea class="form-control border-0 font-monospace" rows="@Rows" id="@Id"
+                      value="@Value" @oninput="OnInputAsync" placeholder="@Placeholder"></textarea>
+        }
+    </div>
+
+    <div class="form-text">
+        마크다운을 지원합니다 — 제목 <code>#</code>, 목록 <code>-</code>, 코드 <code>```</code>, 표 <code>|</code>.
+        보안상 원시 HTML 은 그대로 출력되지 않습니다.
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    [Parameter]
+    public int Rows { get; set; } = 12;
+
+    [Parameter]
+    public string? Id { get; set; }
+
+    [Parameter]
+    public string Placeholder { get; set; } = string.Empty;
+
+    private bool _previewing;
+
+    private Task OnInputAsync(ChangeEventArgs args)
+    {
+        Value = args.Value?.ToString();
+
+        return ValueChanged.InvokeAsync(Value);
+    }
+}

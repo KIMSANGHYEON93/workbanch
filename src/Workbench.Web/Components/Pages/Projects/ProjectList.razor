@@ -1,0 +1,126 @@
+@page "/projects"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@inject IProjectService ProjectService
+@inject NavigationManager Navigation
+
+<PageTitle>프로젝트 · Workbench</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">프로젝트</h1>
+    <a class="btn btn-primary" href="/projects/new">새 프로젝트</a>
+</div>
+
+@if (_loadError is not null)
+{
+    <div class="alert alert-danger" role="alert">@_loadError</div>
+}
+else if (_projects is null)
+{
+    <p class="text-muted">불러오는 중…</p>
+}
+else if (_projects.Count == 0)
+{
+    <div class="alert alert-info" role="alert">
+        아직 프로젝트가 없습니다. <a href="/projects/new">첫 프로젝트를 만드세요.</a>
+    </div>
+}
+else
+{
+    @if (_actionError is not null)
+    {
+        <div class="alert alert-warning" role="alert">@_actionError</div>
+    }
+
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th scope="col">키</th>
+                <th scope="col">이름</th>
+                <th scope="col">설명</th>
+                <th scope="col" class="text-end">이슈</th>
+                <th scope="col" class="text-end">작업</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var project in _projects)
+            {
+                <tr>
+                    <td>
+                        <span class="badge bg-secondary">@project.Key</span>
+                        @if (project.IsOpenProject)
+                        {
+                            <span class="badge bg-light text-dark ms-1"
+                                  title="구성원이 없어 로그인한 누구나 쓸 수 있습니다">열림</span>
+                        }
+                    </td>
+                    <td>@project.Name</td>
+                    <td class="text-muted">@project.Description</td>
+                    <td class="text-end">@project.IssueCount</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="@($"/projects/{project.Id}/members")">구성원</a>
+                        @if (!project.CanAdminister)
+                        {
+                            <span class="text-muted small ms-2" title="관리자만 수정·삭제할 수 있습니다">읽기 전용</span>
+                        }
+                        else if (_pendingDeleteId == project.Id)
+                        {
+                            <span class="me-2">삭제할까요?</span>
+                            <button type="button" class="btn btn-sm btn-danger"
+                                    @onclick="() => DeleteAsync(project.Id)">삭제</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    @onclick="() => _pendingDeleteId = null">취소</button>
+                        }
+                        else
+                        {
+                            <a class="btn btn-sm btn-outline-secondary"
+                               href="@($"/projects/{project.Id}/edit")">수정</a>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    @onclick="() => _pendingDeleteId = project.Id">삭제</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<ProjectListItem>? _projects;
+    private Guid? _pendingDeleteId;
+    private string? _loadError;
+    private string? _actionError;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+
+        try
+        {
+            _projects = await ProjectService.ListAsync();
+        }
+        catch (Exception)
+        {
+            // 원인은 로그가 갖고 있다. 화면에는 조치 가능한 문장만 남긴다.
+            _loadError = "프로젝트 목록을 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        _pendingDeleteId = null;
+        _actionError = null;
+
+        var result = await ProjectService.DeleteAsync(id);
+        if (!result.Succeeded)
+        {
+            _actionError = string.Join(" ", result.Errors);
+            return;
+        }
+
+        await LoadAsync();
+    }
+}

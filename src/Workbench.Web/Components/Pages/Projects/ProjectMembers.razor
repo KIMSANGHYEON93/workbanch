@@ -1,0 +1,212 @@
+@page "/projects/{Id:guid}/members"
+@using Workbench.Application.DTOs
+@using Workbench.Application.Interfaces
+@using Workbench.Domain.Enums
+@inject IProjectAccess Access
+@inject IProjectService ProjectService
+@inject IIssueService IssueService
+
+<PageTitle>구성원 · Workbench</PageTitle>
+
+@if (_notFound)
+{
+    <div class="alert alert-warning" role="alert">
+        프로젝트를 찾을 수 없습니다. <a href="/projects">목록으로 돌아가기</a>
+    </div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">@(_project?.Key) 구성원</h1>
+        <a class="btn btn-outline-secondary" href="/projects">프로젝트 목록</a>
+    </div>
+
+    @if (_loadError is not null)
+    {
+        <div class="alert alert-danger" role="alert">@_loadError</div>
+    }
+    else
+    {
+        @if (_permissions.IsOpenProject)
+        {
+            <div class="alert alert-info" role="alert">
+                <strong>열린 프로젝트입니다.</strong>
+                구성원이 없어 로그인한 누구나 이 프로젝트의 이슈·페이지를 만들고 고칠 수 있습니다.
+                아래에서 구성원을 추가하면 그 순간부터 구성원만 쓸 수 있습니다.
+            </div>
+        }
+        else if (!_permissions.CanAdminister)
+        {
+            <div class="alert alert-secondary" role="alert">
+                구성원을 보고 있을 뿐, 변경할 권한은 없습니다. 이 프로젝트의 관리자에게 요청하세요.
+            </div>
+        }
+
+        @if (_actionError is not null)
+        {
+            <div class="alert alert-warning" role="alert">@_actionError</div>
+        }
+
+        @if (_members is null)
+        {
+            <p class="text-muted">불러오는 중…</p>
+        }
+        else
+        {
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">이름</th>
+                        <th scope="col">메일</th>
+                        <th scope="col">역할</th>
+                        <th scope="col" class="text-end">작업</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var member in _members)
+                    {
+                        <tr>
+                            <td>@member.DisplayName</td>
+                            <td class="text-muted">@member.Email</td>
+                            <td>
+                                <select class="form-select form-select-sm" style="width:auto"
+                                        value="@member.Role" disabled="@(!_permissions.CanAdminister)"
+                                        @onchange="e => SetRoleAsync(member.UserId, e.Value?.ToString())"
+                                        aria-label="@($"{member.DisplayName} 역할")">
+                                    @foreach (var role in Enum.GetValues<ProjectRole>())
+                                    {
+                                        <option value="@role" selected="@(role == member.Role)">
+                                            @RoleLabel(role)
+                                        </option>
+                                    }
+                                </select>
+                            </td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        disabled="@(!_permissions.CanAdminister)"
+                                        @onclick="() => RemoveAsync(member.UserId)">제외</button>
+                            </td>
+                        </tr>
+                    }
+                    @if (_members.Count == 0)
+                    {
+                        <tr><td colspan="4" class="text-muted">등록된 구성원이 없습니다.</td></tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (_permissions.CanAdminister)
+            {
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label" for="add-user">구성원 추가</label>
+                        <select id="add-user" class="form-select" @bind="_userToAdd">
+                            <option value="@Guid.Empty">사용자 선택</option>
+                            @foreach (var candidate in Candidates)
+                            {
+                                <option value="@candidate.Id">@candidate.DisplayName (@candidate.Email)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="add-role">역할</label>
+                        <select id="add-role" class="form-select" @bind="_roleToAdd">
+                            @foreach (var role in Enum.GetValues<ProjectRole>())
+                            {
+                                <option value="@role">@RoleLabel(role)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-primary"
+                                disabled="@(_userToAdd == Guid.Empty)"
+                                @onclick="AddAsync">추가</button>
+                    </div>
+                </div>
+            }
+        }
+
+        <div class="mt-4 text-muted small">
+            <strong>보기</strong>는 로그인한 모두에게 열려 있습니다. 역할은 <strong>쓰기</strong>를 나눕니다 —
+            @RoleLabel(ProjectRole.Viewer)는 읽기만, @RoleLabel(ProjectRole.Member)는 이슈·페이지 변경,
+            @RoleLabel(ProjectRole.Admin)은 프로젝트 설정과 구성원 관리까지.
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private ProjectDetail? _project;
+    private IReadOnlyList<ProjectMemberItem>? _members;
+    private IReadOnlyList<UserOption> _users = [];
+    private ProjectPermissions _permissions = ProjectPermissions.None;
+    private Guid _userToAdd = Guid.Empty;
+    private ProjectRole _roleToAdd = ProjectRole.Member;
+    private string? _loadError;
+    private string? _actionError;
+    private bool _notFound;
+
+    private IEnumerable<UserOption> Candidates =>
+        _users.Where(u => _members?.All(m => m.UserId != u.Id) ?? true);
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+
+        try
+        {
+            _project = await ProjectService.GetAsync(Id);
+            if (_project is null)
+            {
+                _notFound = true;
+                return;
+            }
+
+            _permissions = await Access.GetAsync(Id);
+            _members = await Access.ListMembersAsync(Id);
+            _users = await IssueService.ListAssigneeOptionsAsync();
+        }
+        catch (Exception)
+        {
+            _loadError = "구성원을 불러오지 못했습니다. 데이터베이스 연결을 확인하세요.";
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        await ApplyAsync(() => Access.SetRoleAsync(Id, _userToAdd, _roleToAdd));
+        _userToAdd = Guid.Empty;
+    }
+
+    private Task SetRoleAsync(Guid userId, string? role) =>
+        Enum.TryParse<ProjectRole>(role, out var parsed)
+            ? ApplyAsync(() => Access.SetRoleAsync(Id, userId, parsed))
+            : Task.CompletedTask;
+
+    private Task RemoveAsync(Guid userId) => ApplyAsync(() => Access.RemoveMemberAsync(Id, userId));
+
+    private async Task ApplyAsync(Func<Task<OperationResult>> action)
+    {
+        _actionError = null;
+
+        var result = await action();
+        if (!result.Succeeded)
+        {
+            _actionError = string.Join(" ", result.Errors);
+        }
+
+        await LoadAsync();
+    }
+
+    private static string RoleLabel(ProjectRole role) => role switch
+    {
+        ProjectRole.Viewer => "보기",
+        ProjectRole.Member => "구성원",
+        ProjectRole.Admin => "관리자",
+        _ => role.ToString(),
+    };
+}
