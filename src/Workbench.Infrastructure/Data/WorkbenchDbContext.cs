@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Workbench.Domain.Entities;
 using Workbench.Domain.Interfaces;
 
@@ -35,6 +36,20 @@ public class WorkbenchDbContext : DbContext, IUnitOfWork
     public DbSet<Attachment> Attachments => Set<Attachment>();
 
     public void DiscardChanges() => ChangeTracker.Clear();
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+
+        // SQLite 에는 datetimeoffset 에 대응하는 타입이 없어 EF 가 문자열로 저장하는데,
+        // 그러면 ORDER BY 가 사전순이 되어 목록 정렬이 조용히 틀어진다. 이진 변환은
+        // 정렬 가능한 표현을 주므로 이 프로바이더에서만 얹는다.
+        if (Database.IsSqlite())
+        {
+            configurationBuilder.Properties<DateTimeOffset>()
+                .HaveConversion<DateTimeOffsetToBinaryConverter>();
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -15,7 +15,8 @@ public static class DependencyInjection
 
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        bool isDevelopment)
     {
         var connectionString = configuration.GetConnectionString(ConnectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -25,9 +26,33 @@ public static class DependencyInjection
                 $"User Secrets 또는 환경변수에 ConnectionStrings:{ConnectionStringName} 을(를) 설정하세요.");
         }
 
-        // Azure SQL 은 일시적 연결 끊김이 정상 동작 범위에 있다 — 재시도를 기본으로 켠다.
-        services.AddDbContextFactory<WorkbenchDbContext>(options =>
-            options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
+        var databaseSection = configuration.GetSection(DatabaseOptions.SectionName);
+        services.Configure<DatabaseOptions>(databaseSection);
+        var database = databaseSection.Get<DatabaseOptions>() ?? new DatabaseOptions();
+
+        if (database.Provider == DatabaseProvider.Sqlite)
+        {
+            // SQLite 는 동시 쓰기를 직렬화하고 파일 하나에 담기며, 이 저장소의 마이그레이션은
+            // SQL Server 전용이라 여기서는 EnsureCreated 로 스키마를 세운다 — 즉 운영에서
+            // 쓸 수 있는 구성이 아니다. 탈출구를 두지 않는 이유가 그것이다.
+            if (!isDevelopment)
+            {
+                throw new InvalidOperationException(
+                    $"{DatabaseOptions.SectionName}:{nameof(DatabaseOptions.Provider)} 가 "
+                    + $"{nameof(DatabaseProvider.Sqlite)} 인데 호스트 환경이 Development 가 아닙니다. "
+                    + "SQLite 는 SQL Server 없이 화면을 띄워 보기 위한 로컬 데모 전용이며 "
+                    + $"마이그레이션도 적용되지 않습니다. {nameof(DatabaseProvider.SqlServer)} 를 쓰세요.");
+            }
+
+            services.AddDbContextFactory<WorkbenchDbContext>(options =>
+                options.UseSqlite(connectionString));
+        }
+        else
+        {
+            // Azure SQL 은 일시적 연결 끊김이 정상 동작 범위에 있다 — 재시도를 기본으로 켠다.
+            services.AddDbContextFactory<WorkbenchDbContext>(options =>
+                options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
+        }
 
         // Blazor Server 의 스코프는 회로(circuit) 수명과 같아서 DbContext 가 몇 시간씩 살아남는다.
         // 팩토리를 두고 스코프마다 새 인스턴스를 만들어, 나중에 짧은 수명이 필요한 지점에서

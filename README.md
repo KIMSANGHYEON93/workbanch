@@ -162,10 +162,29 @@ dotnet test
 dotnet run --project src/Workbench.Web
 ```
 
-DB 가 없어도 앱은 기동한다(홈 화면은 쿼리를 하지 않는다). 데이터 화면부터는
-`dotnet dotnet-ef database update` 로 스키마를 만들어야 한다.
+**SQL Server 를 설치하지 않아도 바로 뜬다.** Development 환경의 기본값이 파일 기반 SQLite
+데모 모드라(`Database:Provider=Sqlite`), 기동할 때 `App_Data/workbench-demo.db` 에 스키마를
+만들고 훑어볼 예시 데이터(프로젝트 2 · 이슈 10 · 페이지 4 · 댓글 4)를 넣는다. 인증도
+개발용 우회가 켜져 있어 Entra ID 앱 등록 없이 바로 로그인된 상태로 시작한다.
 
-Entra ID 앱 등록은 아직 필요 없다. 4단계에서 개발용 인증 우회 스위치를 추가한다.
+데모 데이터를 넣지 않으려면 `Database:SeedDemoData` 를 `false` 로, 처음부터 다시 만들려면
+`App_Data/` 를 지우고 다시 띄운다.
+
+실제 DB 로 붙이려면 `src/Workbench.Web/appsettings.Development.json` 에서 두 줄을 바꾼다:
+
+```jsonc
+"Database": { "Provider": "SqlServer" },
+"ConnectionStrings": {
+  "Workbench": "Server=(localdb)\\mssqllocaldb;Database=Workbench;Trusted_Connection=True;MultipleActiveResultSets=true"
+}
+```
+
+그다음 `dotnet dotnet-ef database update` 로 스키마를 만든다.
+
+> ⚠ **SQLite 는 로컬 데모 전용이다.** 마이그레이션은 SQL Server 전용이라 이 모드는
+> `EnsureCreated` 로 스키마를 세우고, 인덱스 키 크기·`datetimeoffset` 컬럼 타입 같은
+> 스키마 세부는 재현되지 않는다. Development 환경이 아닌 곳에서 이 프로바이더를 켜면
+> **기동 시점에 예외를 던진다** — 탈출구는 두지 않았다.
 
 ### 설정값
 

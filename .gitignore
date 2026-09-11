@@ -12,3 +12,4 @@ appsettings.*.local.json
 *.ldf
 __azurite*
 .azurite/
+App_Data/

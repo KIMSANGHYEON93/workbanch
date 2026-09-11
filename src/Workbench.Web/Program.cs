@@ -9,7 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddApplication();
 builder.Services.Configure<AttachmentOptions>(
     builder.Configuration.GetSection(AttachmentOptions.SectionName));
@@ -48,5 +48,8 @@ app.MapAttachmentEndpoints();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// SQL Server 구성에서는 즉시 반환한다 — 데모 프로바이더에서만 스키마와 예시 데이터를 세운다.
+await app.InitializeDemoDatabaseAsync();
 
 app.Run();
