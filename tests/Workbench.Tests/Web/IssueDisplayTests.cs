@@ -22,20 +22,33 @@ public class IssueDisplayTests
         AssertLabelled(Enum.GetValues<IssuePriority>(), IssueDisplay.Label);
 
     [Fact]
-    public void EveryStatus_HasABadgeClass()
-    {
-        foreach (var status in Enum.GetValues<IssueStatus>())
-        {
-            Assert.StartsWith("text-bg-", IssueDisplay.BadgeClass(status));
-        }
-    }
+    public void EveryStatus_HasABadgeClass() =>
+        AssertBadged(Enum.GetValues<IssueStatus>(), IssueDisplay.BadgeClass);
 
     [Fact]
-    public void EveryPriority_HasABadgeClass()
+    public void EveryPriority_HasABadgeClass() =>
+        AssertBadged(Enum.GetValues<IssuePriority>(), IssueDisplay.BadgeClass);
+
+    /// <summary>
+    /// ⚠ 여기서 <c>text-bg-</c> 접두어를 요구하면 안 된다 — 번들된 Bootstrap 5.1 에 없는
+    /// 유틸리티라, 그 규약을 지킬수록 배지가 화면에서 사라진다(실제로 그렇게 배포됐다).
+    /// 클래스가 실재하는지는 <see cref="RazorMarkupContractTests"/> 가 번들 CSS 를 직접 읽어 확인한다.
+    /// </summary>
+    private static void AssertBadged<TEnum>(TEnum[] values, Func<TEnum, string> badgeClass)
+        where TEnum : struct, Enum
     {
-        foreach (var priority in Enum.GetValues<IssuePriority>())
+        Assert.NotEmpty(values);
+
+        foreach (var value in values)
         {
-            Assert.StartsWith("text-bg-", IssueDisplay.BadgeClass(priority));
+            var css = badgeClass(value);
+
+            Assert.False(string.IsNullOrWhiteSpace(css));
+
+            // 배경색이 없으면 .badge 의 흰 글자만 남아 아무것도 보이지 않는다.
+            Assert.Contains(
+                css.Split(' ', StringSplitOptions.RemoveEmptyEntries),
+                token => token.StartsWith("bg-", StringComparison.Ordinal));
         }
     }
 

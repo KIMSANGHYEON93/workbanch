@@ -54,11 +54,11 @@ else
                         <a href="@($"/pages/{node.Slug}")">@node.Title</a>
                         @if (!node.IsPublished)
                         {
-                            <span class="badge text-bg-warning ms-2">비공개</span>
+                            <span class="badge bg-warning text-dark ms-2">비공개</span>
                         }
                         @if (node.ProjectKey is not null)
                         {
-                            <span class="badge text-bg-light ms-2">@node.ProjectKey</span>
+                            <span class="badge bg-light text-dark ms-2">@node.ProjectKey</span>
                         }
                     </span>
                     <span class="text-muted small">@node.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>

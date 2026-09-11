@@ -41,7 +41,7 @@ else
         <section class="mb-4">
             <h2 class="h6 text-muted">
                 @KindLabel(group.Kind)
-                <span class="badge text-bg-light">@group.Hits.Count@(group.Truncated ? "+" : "")</span>
+                <span class="badge bg-light text-dark">@group.Hits.Count@(group.Truncated ? "+" : "")</span>
             </h2>
             <ul class="list-group">
                 @foreach (var hit in group.Hits)

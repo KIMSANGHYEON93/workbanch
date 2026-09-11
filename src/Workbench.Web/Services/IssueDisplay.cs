@@ -19,15 +19,22 @@ public static class IssueDisplay
         _ => status.ToString(),
     };
 
+    /// <summary>
+    /// ⚠ <c>text-bg-*</c> 를 쓰지 않는다. wwwroot 에 번들된 Bootstrap 은 <b>5.1</b> 이고 그 유틸리티는
+    /// 5.2 에서 들어왔다 — 5.1 에서는 클래스가 존재하지 않는데 <c>.badge</c> 가 <c>color:#fff</c> 를
+    /// 걸어 두어, 배경 없는 흰 글자가 된다. 즉 <b>모든 배지가 화면에서 사라진다</b>.
+    /// 배경과 글자색을 따로 지정하는 이유이고, 계약 테스트가 여기서 나오는 클래스들이
+    /// 번들 CSS 에 실재하는지 확인한다.
+    /// </summary>
     public static string BadgeClass(IssueStatus status) => status switch
     {
-        IssueStatus.Backlog => "text-bg-secondary",
-        IssueStatus.Todo => "text-bg-light",
-        IssueStatus.InProgress => "text-bg-primary",
-        IssueStatus.InReview => "text-bg-info",
-        IssueStatus.Done => "text-bg-success",
-        IssueStatus.Cancelled => "text-bg-dark",
-        _ => "text-bg-secondary",
+        IssueStatus.Backlog => "bg-secondary",
+        IssueStatus.Todo => "bg-light text-dark",
+        IssueStatus.InProgress => "bg-primary",
+        IssueStatus.InReview => "bg-info text-dark",
+        IssueStatus.Done => "bg-success",
+        IssueStatus.Cancelled => "bg-dark",
+        _ => "bg-secondary",
     };
 
     public static string Label(IssueType type) => type switch
@@ -51,10 +58,10 @@ public static class IssueDisplay
 
     public static string BadgeClass(IssuePriority priority) => priority switch
     {
-        IssuePriority.Lowest or IssuePriority.Low => "text-bg-light",
-        IssuePriority.Medium => "text-bg-secondary",
-        IssuePriority.High => "text-bg-warning",
-        IssuePriority.Highest => "text-bg-danger",
-        _ => "text-bg-secondary",
+        IssuePriority.Lowest or IssuePriority.Low => "bg-light text-dark",
+        IssuePriority.Medium => "bg-secondary",
+        IssuePriority.High => "bg-warning text-dark",
+        IssuePriority.Highest => "bg-danger",
+        _ => "bg-secondary",
     };
 }
