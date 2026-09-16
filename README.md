@@ -551,8 +551,8 @@ SQLite 테스트는 쿼리가 실제로 번역·실행되는지를 본다.
 - NuGet 감사가 켜져 있다(`NuGetAuditMode=all`). **high/critical(NU1903/NU1904) 은 빌드 오류**,
   moderate 이하는 경고. 당장 고칠 수 없으면 해당 프로젝트에서 `<NoWarn>` 로 한시 해제하되 이유를 커밋에 남긴다
 
-> ⚠ **현재 남아 있는 경고 1건**: `AngleSharp 1.2.0`(NU1902, moderate). bUnit 1.40 이 끌고 오는
-> 테스트 전용 의존성이다. 더 높은 버전으로 올려 봤더니 bUnit 이 **런타임에** 깨진다
-> (`MissingMethodException: IHtmlCollection.get_Item`) — 시그니처가 바뀌었다.
-> 억지로 눌러 두면 잊히므로 **경고를 그대로 보이게 두었다.** bUnit 이 올라가면 함께 해소된다.
-> 운영 산출물에는 들어가지 않는다.
+> ✅ **해소됨** (2026-09-16): `AngleSharp 1.2.0`(NU1902, moderate) 경고가 있었다. bUnit 1.40 이 끌고 오는
+> 테스트 전용 의존성이었고, AngleSharp 만 단독으로 올리면 bUnit 이 **런타임에** 깨졌다
+> (`MissingMethodException: IHtmlCollection.get_Item`) — 시그니처가 바뀌어서다.
+> bUnit 을 1.40 → 2.11.3 으로 올려(AngleSharp 1.8.1 을 정식으로 요구) 해소했다.
+> 동반 마이그레이션: `RenderComponent<T>()` → `Render<T>()`, `TestContext` → `BunitContext`.
