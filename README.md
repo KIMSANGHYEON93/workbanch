@@ -10,6 +10,9 @@
 - **파일**: Azure Blob Storage (로컬은 Azurite)
 - **마크다운**: Markdig 렌더링 + TextArea/미리보기 에디터 (JS interop 없음)
 
+> 이 문서는 **코드가 무엇이고 왜 그렇게 설계됐는가**를 담는다.
+> 회귀 가드 기준선·브랜치 정책·이 저장소 특유의 함정 같은 **작업 방식**은 [`CLAUDE.md`](CLAUDE.md) 에 있다.
+
 --
 
 ## 목업 사진
