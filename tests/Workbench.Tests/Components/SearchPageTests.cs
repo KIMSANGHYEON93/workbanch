@@ -11,7 +11,7 @@ using Workbench.Web.Components.Pages;
 
 namespace Workbench.Tests.Components;
 
-public class SearchPageTests : TestContext
+public class SearchPageTests : BunitContext
 {
     private readonly FakeIssueRepository _issues = new();
     private readonly FakePageRepository _pages = new();
@@ -27,7 +27,7 @@ public class SearchPageTests : TestContext
     [Fact]
     public void WithoutAQuery_ItAsksForOne()
     {
-        var page = RenderComponent<SearchPage>();
+        var page = Render<SearchPage>();
 
         Assert.Contains("검색어를 입력하세요", page.Markup);
         Assert.Contains($"{SearchLimits.MinQueryLength}자 이상", page.Markup);
@@ -81,7 +81,7 @@ public class SearchPageTests : TestContext
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(navigation.GetUriWithQueryParameter("q", query));
 
-        return RenderComponent<SearchPage>();
+        return Render<SearchPage>();
     }
 
     private void SeedIssue(int number, string title) =>

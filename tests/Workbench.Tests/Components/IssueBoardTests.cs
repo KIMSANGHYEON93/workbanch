@@ -17,7 +17,7 @@ namespace Workbench.Tests.Components;
 /// 오류 분기밖에 태울 수 없기 때문이다.
 /// 서비스는 가짜가 아니라 <b>실제 구현</b>을 메모리 저장소 위에 올려 쓴다.
 /// </summary>
-public class IssueBoardTests : TestContext
+public class IssueBoardTests : BunitContext
 {
     private readonly FakeIssueRepository _issues = new();
     private readonly FakeProjectRepository _projects = new();
@@ -43,7 +43,7 @@ public class IssueBoardTests : TestContext
     [Fact]
     public void Board_RendersOneColumnPerStatus()
     {
-        var board = RenderComponent<IssueBoard>();
+        var board = Render<IssueBoard>();
 
         Assert.Equal(BoardLayout.Columns.Count, board.FindAll(".board-column").Count);
     }
@@ -51,7 +51,7 @@ public class IssueBoardTests : TestContext
     [Fact]
     public void EveryColumn_ShowsItsKoreanLabel()
     {
-        var board = RenderComponent<IssueBoard>();
+        var board = Render<IssueBoard>();
         var markup = board.Markup;
 
         foreach (var status in BoardLayout.Columns)
@@ -66,7 +66,7 @@ public class IssueBoardTests : TestContext
         SeedIssue(1, "진행 중인 일", IssueStatus.InProgress);
         SeedIssue(2, "완료한 일", IssueStatus.Done);
 
-        var board = RenderComponent<IssueBoard>();
+        var board = Render<IssueBoard>();
         var columns = board.FindAll(".board-column");
 
         var inProgress = columns[BoardLayout.IndexOf(IssueStatus.InProgress)];
@@ -84,7 +84,7 @@ public class IssueBoardTests : TestContext
         // 목록은 완료를 감추지만 보드에는 완료 열이 있다 — 감추면 그 열이 영원히 비어 보인다.
         SeedIssue(1, "완료한 일", IssueStatus.Done);
 
-        var board = RenderComponent<IssueBoard>();
+        var board = Render<IssueBoard>();
 
         Assert.Contains("완료한 일", board.Markup);
     }
@@ -92,7 +92,7 @@ public class IssueBoardTests : TestContext
     [Fact]
     public void EmptyColumns_SaySo()
     {
-        var board = RenderComponent<IssueBoard>();
+        var board = Render<IssueBoard>();
 
         Assert.Equal(BoardLayout.Columns.Count, board.FindAll(".board-column").Count(c => c.InnerHtml.Contains("비어 있음")));
     }
@@ -103,7 +103,7 @@ public class IssueBoardTests : TestContext
         SeedIssue(1, "첫 열", BoardLayout.Columns[0]);
         SeedIssue(2, "마지막 열", BoardLayout.Columns[^1]);
 
-        var board = RenderComponent<IssueBoard>();
+        var board = Render<IssueBoard>();
         var cards = board.FindAll(".board-card");
 
         var firstColumnButtons = cards[0].QuerySelectorAll(".board-card-actions button");
@@ -120,7 +120,7 @@ public class IssueBoardTests : TestContext
     {
         var issue = SeedIssue(1, "옮길 일", IssueStatus.Todo);
 
-        var board = RenderComponent<IssueBoard>();
+        var board = Render<IssueBoard>();
         board.Find(".board-card .board-card-actions button:last-child").Click();
 
         Assert.Equal(IssueStatus.InProgress, issue.Status);
@@ -137,7 +137,7 @@ public class IssueBoardTests : TestContext
         // 끌어놓기는 JS interop 없이 Blazor 의 드래그 이벤트만으로 동작한다.
         var issue = SeedIssue(1, "끌어 옮길 일", IssueStatus.Backlog);
 
-        var board = RenderComponent<IssueBoard>();
+        var board = Render<IssueBoard>();
         board.Find(".board-card").DragStart();
         board.FindAll(".board-column")[BoardLayout.IndexOf(IssueStatus.InReview)].Drop();
 
