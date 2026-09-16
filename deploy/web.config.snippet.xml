@@ -1,0 +1,63 @@
+<!--
+  DEPLOY.md 5절 참고.
+
+  dotnet publish 가 자동 생성하는 web.config(hostingModel="inprocess" 포함)에
+  이 파일의 <aspNetCore> 속성·자식 요소를 병합해서 쓴다. 통째로 덮어쓰지 말 것 —
+  publish 가 만드는 <handlers> 블록은 그대로 둔다.
+
+  비밀값(ConnectionStrings__Workbench, AzureAd__ClientSecret, FileStorage__ConnectionString)은
+  여기 평문으로 적지 않는다. IIS 관리자 > 사이트 선택 > "구성 편집기" >
+  system.webServer/aspNetCore > environmentVariables 에서 넣거나, 서버 OS 환경변수로 준다.
+  아래 <environmentVariables> 에는 비밀이 아닌 값만 남겼다.
+-->
+<configuration>
+  <location path="." inheritInChildApplications="false">
+    <system.webServer>
+      <handlers>
+        <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
+      </handlers>
+
+      <!--
+        stdoutLogEnabled 는 최초 배포 때 true 로 켜서 500.30(기동 실패) 원인을 로그로 잡고,
+        정상 기동을 확인한 뒤 false 로 되돌린다 — 계속 켜 두면 로그가 무한정 쌓인다.
+        hostingModel 은 publish 기본값(inprocess)을 유지한다: net8.0 IIS 배포의 표준 모델이고,
+        outofprocess 로 바꾸면 Kestrel 이 추가로 뜨는 구성이라 이 저장소가 검증한 적 없다.
+      -->
+      <aspNetCore processPath="dotnet"
+                  arguments=".\Workbench.Web.dll"
+                  stdoutLogEnabled="true"
+                  stdoutLogFile=".\logs\stdout"
+                  hostingModel="inprocess"
+                  requestTimeout="00:04:00">
+        <environmentVariables>
+          <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
+          <environmentVariable name="Database__Provider" value="SqlServer" />
+          <environmentVariable name="Authentication__Mode" value="EntraId" />
+          <environmentVariable name="FileStorage__Provider" value="AzureBlob" />
+          <!--
+            아래 4개는 비밀값이다 — IIS 관리자 구성 편집기로 넣는다. 여기 그대로 두면
+            "설정된 키" 라는 것만 문서화하는 용도다. 값은 절대 커밋하지 않는다.
+            <environmentVariable name="ConnectionStrings__Workbench" value="" />
+            <environmentVariable name="AzureAd__TenantId" value="" />
+            <environmentVariable name="AzureAd__ClientId" value="" />
+            <environmentVariable name="AzureAd__ClientSecret" value="" />
+            <environmentVariable name="FileStorage__ConnectionString" value="" />
+          -->
+        </environmentVariables>
+      </aspNetCore>
+
+      <!--
+        DEPLOY.md 4절: 첨부 업로드는 Blazor 회로(SignalR)로 흐르기 때문에 이 상한에
+        지금 당장 걸리지 않는다. 그래도 향후 HTTP POST 업로드 경로가 생길 걸 대비해
+        AttachmentOptions 의 25MB(26,214,400 바이트) 보다 넉넉히 잡아 둔다.
+        IIS 기본값 30,000,000 바이트 그대로 두면 25MB 파일이 multipart 오버헤드와 함께
+        상한에 바짝 붙는다.
+      -->
+      <security>
+        <requestFiltering>
+          <requestLimits maxAllowedContentLength="41943040" /> <!-- 40MB -->
+        </requestFiltering>
+      </security>
+    </system.webServer>
+  </location>
+</configuration>

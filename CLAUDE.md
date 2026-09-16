@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 이 파일은 이 저장소에서 작업할 때의 **작업 방식**을 담는다.
-"코드가 무엇이고 왜 그렇게 설계됐는가" 는 [`README.md`](README.md) 가 담는다 — 여기서 되풀이하지 않는다.
+"코드가 무엇이고 왜 그렇게 설계됐는가" 는 [`README.md`](README.md) 가, "IIS 에 어떻게 올리는가" 는
+[`DEPLOY.md`](DEPLOY.md) 가 담는다 — 여기서 되풀이하지 않는다.
 
 # Workbench
 
@@ -149,9 +150,6 @@ SQLite 데모 모드는 `EnsureCreated` 로 스키마를 세운다 — 인덱스
 
 ## 아직 이 저장소에 없는 것
 
-- **IIS 배포 가이드** — `web.config`·배포 스크립트·`DEPLOY.md` 모두 없다.
-  Blazor Server 라 IIS WebSocket 기능, 앱 풀 유휴 시간 초과·재활용(회로가 끊긴다), 웹팜 sticky session 이
-  전부 배포 조건이 된다. 첨부 상한 25MB 가 IIS 기본 요청 상한(30,000,000바이트)에 근접한 것도 같이 다뤄야 한다.
 - **CI** — GitHub Actions 워크플로가 없다. 지금은 `dotnet build` + `dotnet test` 를 사람이 돌린 결과만 있다.
 - **UI 프레임워크 대안 검토** — Blazor Server 의 회로 의존이 문제가 되면, 위 「계층 규약」 덕분에
   업무 로직은 무변경이고 `.razor` 23파일(2,386줄, `src` 의 약 28%)만 바뀐다.
@@ -163,3 +161,5 @@ SQLite 데모 모드는 `EnsureCreated` 로 스키마를 세운다 — 인덱스
 | 날짜 | 변경 내용 | 사유 |
 |------|----------|------|
 | 2026-09-16 | `CLAUDE.md` 신설 — `knox-mail-pipeline` 의 작업 방식(회귀 가드 규약·뮤테이션 게이트·실측 우선·디버깅 프로토콜)을 이 저장소 맥락으로 이관하고, 이번까지 겪은 함정 4건을 기록 | 저장소가 분리되면서 작업 규약이 원본 저장소에만 남아 있었다. README 는 설계 기록이라 "어떻게 작업하는가" 를 담는 자리가 없었다 |
+| 2026-09-16 | bUnit 1.40 → 2.11.3, `NU1902`(AngleSharp 1.2.0) 경고 해소. 회귀 가드 정본 줄 갱신(`6d5f4e2`, 0 error / 0 warning) | AngleSharp 만 단독으로 올리면 bUnit 1.40 과 바이너리 비호환(뮤테이션 없이도 실패로 관측)이라, 실제 해법인 bUnit 메이저 업그레이드로 처리 |
+| 2026-09-16 | `DEPLOY.md` + `deploy/web.config.snippet.xml` + `deploy/preflight-iis.ps1` 신설 — IIS 배포 가이드 | 「아직 이 저장소에 없는 것」에 있던 항목을 채움. 첨부 업로드가 HTTP POST 가 아니라 Blazor 회로(SignalR) 로 흐른다는 걸 코드로 확인해, IIS 요청 상한이 실제로는 이 경로를 막지 않는다는 점을 정정해 기록 |
