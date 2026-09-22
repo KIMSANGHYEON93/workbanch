@@ -6,6 +6,7 @@ obj/
 .vscode/
 artifacts/
 TestResults/
+publish/
 appsettings.*.local.json
 *.db
 *.mdf

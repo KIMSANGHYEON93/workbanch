@@ -7,31 +7,49 @@ namespace Workbench.Infrastructure.Repositories;
 
 public class AttachmentRepository : Repository<Attachment>, IAttachmentRepository
 {
-    public AttachmentRepository(WorkbenchDbContext dbContext)
+    private readonly IDbContextFactory<WorkbenchDbContext> _contextFactory;
+
+    public AttachmentRepository(WorkbenchDbContext dbContext, IDbContextFactory<WorkbenchDbContext> contextFactory)
         : base(dbContext)
     {
+        _contextFactory = contextFactory;
     }
 
-    public async Task<IReadOnlyList<Attachment>> ListForIssueAsync(
+    public Task<IReadOnlyList<Attachment>> ListForIssueAsync(
         Guid issueId,
         CancellationToken cancellationToken = default) =>
-        await Ordered(a => a.IssueId == issueId).ToListAsync(cancellationToken);
+        ListAsync(a => a.IssueId == issueId, cancellationToken);
 
-    public async Task<IReadOnlyList<Attachment>> ListForPageAsync(
+    public Task<IReadOnlyList<Attachment>> ListForPageAsync(
         Guid pageId,
         CancellationToken cancellationToken = default) =>
-        await Ordered(a => a.PageId == pageId).ToListAsync(cancellationToken);
+        ListAsync(a => a.PageId == pageId, cancellationToken);
 
     public Task<Attachment?> GetWithUploaderAsync(
         Guid id,
         CancellationToken cancellationToken = default) =>
         Set.Include(a => a.UploadedBy).FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
 
-    private IQueryable<Attachment> Ordered(
-        System.Linq.Expressions.Expression<Func<Attachment, bool>> predicate) =>
-        Set.AsNoTracking()
+    /// <summary>
+    /// 이슈 상세 화면에서 이 목록은 <c>CommentThread</c> 와 형제 컴포넌트로 동시에 로드된다.
+    /// 회로가 공유하는 <see cref="Repository{TEntity}.DbContext"/> 를 그대로 쓰면 두 쿼리가
+    /// 겹칠 때 EF Core 가 "A second operation was started on this context before a previous
+    /// operation completed" 로 죽는다(실기동으로 발견) — 그래서 이 읽기 전용 조회만 짧은 수명의
+    /// 컨텍스트를 새로 연다. 쓰기(Add/Remove)는 여전히 공유 컨텍스트로 커밋 시점을
+    /// IUnitOfWork 에 맡긴다.
+    /// </summary>
+    private async Task<IReadOnlyList<Attachment>> ListAsync(
+        System.Linq.Expressions.Expression<Func<Attachment, bool>> predicate,
+        CancellationToken cancellationToken)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+
+        return await context.Set<Attachment>()
+            .AsNoTracking()
             .Include(a => a.UploadedBy)
             .Where(predicate)
             .OrderBy(a => a.UploadedAt)
-            .ThenBy(a => a.Id);
+            .ThenBy(a => a.Id)
+            .ToListAsync(cancellationToken);
+    }
 }
