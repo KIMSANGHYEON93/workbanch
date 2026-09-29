@@ -24,14 +24,21 @@ public sealed class SqliteTestDatabase : IDisposable
 {
     private readonly SqliteConnection _connection;
 
+    private readonly IDbContextFactory<WorkbenchDbContext> _contextFactory;
+
     public SqliteTestDatabase()
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
 
-        Context = new SqliteWorkbenchDbContext(
-            new DbContextOptionsBuilder<SqliteWorkbenchDbContext>().UseSqlite(_connection).Options);
+        var options = new DbContextOptionsBuilder<SqliteWorkbenchDbContext>().UseSqlite(_connection).Options;
+        Context = new SqliteWorkbenchDbContext(options);
         Context.Database.EnsureCreated();
+
+        // CommentRepository/AttachmentRepository 가 형제 컴포넌트 동시 로드를 피하려고
+        // IDbContextFactory 로 별도 컨텍스트를 여는데, 같은 인메모리 연결을 공유해야 같은
+        // 데이터를 본다.
+        _contextFactory = new TestDbContextFactory(options);
 
         Context.Users.Add(new AppUser
         {
@@ -63,7 +70,7 @@ public sealed class SqliteTestDatabase : IDisposable
             CurrentUser,
             NullLogger<IssueService>.Instance);
         Comments = new CommentService(
-            new CommentRepository(Context), issueRepository, pageRepository, Context, CurrentUser);
+            new CommentRepository(Context, _contextFactory), issueRepository, pageRepository, Context, CurrentUser);
     }
 
     public WorkbenchDbContext Context { get; }
@@ -85,7 +92,7 @@ public sealed class SqliteTestDatabase : IDisposable
         IFileStorage storage,
         AttachmentOptions? options = null) =>
         new(
-            new AttachmentRepository(Context),
+            new AttachmentRepository(Context, _contextFactory),
             new IssueRepository(Context),
             new PageRepository(Context),
             storage,
@@ -119,5 +126,17 @@ public sealed class SqliteTestDatabase : IDisposable
             configurationBuilder.Properties<DateTimeOffset>()
                 .HaveConversion<DateTimeOffsetToBinaryConverter>();
         }
+    }
+
+    private sealed class TestDbContextFactory : IDbContextFactory<WorkbenchDbContext>
+    {
+        private readonly DbContextOptions<SqliteWorkbenchDbContext> _options;
+
+        public TestDbContextFactory(DbContextOptions<SqliteWorkbenchDbContext> options)
+        {
+            _options = options;
+        }
+
+        public WorkbenchDbContext CreateDbContext() => new SqliteWorkbenchDbContext(_options);
     }
 }

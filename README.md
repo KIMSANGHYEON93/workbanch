@@ -400,6 +400,30 @@ Task<OperationResult> AddToPageAsync(Guid pageId,  string? content, ...);
 
 이슈·페이지를 지우면 그 댓글은 `CASCADE` 로 함께 사라진다(고아 행이 쌓이지 않는다) — 이것도 실행으로 확인했다.
 
+### ★ 실측으로 드러난 결함: 형제 패널의 `DbContext` 동시 사용
+
+2026-09-22, 실제 SQL Server + IIS 배포에서 처음 발견(이 저장소 개발 샌드박스는 DB 가 없어
+`AttachmentPanel`·`CommentThread` 가 실제로 그려지는 경로 자체를 타 본 적이 없었다).
+
+이슈 상세 화면은 `<AttachmentPanel>` 과 `<CommentThread>` 를 형제 컴포넌트로 나란히 그리는데,
+`WorkbenchDbContext` 는 회로(circuit) 하나당 **하나의 공유 인스턴스**로 등록돼 있다
+(`Infrastructure/DependencyInjection.cs`). 두 패널이 같은 렌더 사이클에서 각자
+`OnParametersSetAsync` 로 DB 조회를 시작하면, EF Core 가 같은 `DbContext` 인스턴스에 겹쳐 들어온
+두 번째 호출을 `InvalidOperationException("A second operation was started on this context
+before a previous operation completed")` 로 거부한다. 화면은 이를 `catch (Exception)` 으로
+삼키고 "데이터베이스 연결을 확인하세요" 라는, 원인과 무관한 문구를 보여줬다 — 실제로는 연결
+문제가 아니라 동시성 충돌이었다.
+
+**고친 지점**: `CommentRepository`·`AttachmentRepository` 의 목록 조회(`ListForIssueAsync`/
+`ListForPageAsync`)만 이미 등록돼 있던 `IDbContextFactory<WorkbenchDbContext>` 로 짧은 수명의
+컨텍스트를 새로 열어 쓰도록 바꿨다. 쓰기(`Add`/`Remove`, `SaveChanges`)는 그대로 공유
+컨텍스트로 `IUnitOfWork` 커밋 시점에 맡긴다 — 팩토리는 이 시나리오를 위해 애초에
+등록해 뒀던 것이다(DI 코드의 주석 참고).
+
+**실기동 재현·검증**: `/issues/{key}` 를 5회 연속 새로고침 — 수정 전 간헐적으로 댓글 패널이
+깨졌고, 수정 후에는 5회 전부 첨부·댓글 패널이 함께 정상 렌더됐다. 댓글 작성(쓰기 경로)도
+같은 세션에서 확인.
+
 ---
 
 ## 첨부 파일 (10단계)
@@ -535,8 +559,6 @@ SQLite 테스트는 쿼리가 실제로 번역·실행되는지를 본다.
 - **`AzureBlobFileStorage` 는 한 번도 실행된 적이 없다** — 이 환경에 Azure 접속 정보도 Azurite 도
   없다. 업로드·다운로드·삭제 경로는 `LocalFileStorage` 로 실제 디스크에서 검증했고, Blob 구현은
   같은 인터페이스를 만족하는 코드까지다. **운영 전환 전 Azurite 로 한 번 태워 볼 것.**
-- **첨부·댓글 패널의 정상 렌더** — 두 패널은 대상(이슈·페이지)이 로드된 뒤에만 그려지는데,
-  이 환경에는 DB 가 없어 그 분기에 도달하지 못한다.
 
 ---
 

@@ -23,6 +23,10 @@ ASP.NET Core 8 / Blazor Server / EF Core / Entra ID / Azure Blob / Markdig / Boo
 ```bash
 dotnet build          # 0 error 를 먼저 확인
 dotnet test           # skip 0 · 위 정본과 대조
+
+# 클래스/메서드 단위로만 돌릴 때 (예: 이슈 서비스만)
+dotnet test --filter "FullyQualifiedName~IssueServiceTests"
+dotnet test --filter "FullyQualifiedName~IssueServiceTests.ChangeStatus_ToTheSameStatusDoesNotTouchTheIssue"
 ```
 
 **착수 전에 baseline 을 직접 재라.** 위 수치를 읽고 시작하지 말고 `dotnet test` 를 한 번 돌려라.

@@ -16,14 +16,28 @@ SQL Server 에서는 재현되지 않는 방식이라 마이그레이션 대체�
 **최초 배포·스키마 변경 배포 전에 반드시:**
 
 ```powershell
-dotnet ef database update `
-  --project src\Workbench.Infrastructure `
-  --startup-project src\Workbench.Web `
-  --connection "<SQL Server 접속 문자열>"
+$env:WORKBENCH_DESIGNTIME_CONNECTION = "<SQL Server 접속 문자열>"
+dotnet tool restore
+dotnet dotnet-ef database update --project src\Workbench.Infrastructure
 ```
+
+⚠ **`--startup-project src\Workbench.Web` 을 주지 마라 — 실측상 깨진다.** `Microsoft.EntityFrameworkCore.Design`
+패키지가 `Workbench.Infrastructure.csproj` 에 `PrivateAssets=all` 로 걸려 있어(의도적 — 런타임 배포물에
+설계 시점 전용 패키지가 섞이지 않게 하기 위함) `Workbench.Web` 프로젝트로는 전이되지 않는다. `dotnet-ef` 는
+시작 프로젝트에서 이 패키지를 직접 찾으므로, `--startup-project` 를 Web 으로 지정하면
+`"Your startup project 'Workbench.Web' doesn't reference Microsoft.EntityFrameworkCore.Design"` 로 바로 죽는다.
+`--project` 만 주면 `dotnet-ef` 가 그 프로젝트를 시작 프로젝트로도 겸해 써서 문제가 없다 — README.md 3단계가
+쓰는 형태가 이것이다.
+
+접속 문자열은 `WorkbenchDbContextFactory` 가 `WORKBENCH_DESIGNTIME_CONNECTION` 환경변수로 받는다
+(코드에 실제 접속 문자열을 두지 않기 위한 설계 — README.md 3단계 참고).
 
 앱을 먼저 띄우고 마이그레이션을 나중에 돌리면, 그 사이 요청은 없는 테이블/컬럼에 부딪혀 500 을 낸다.
 **순서: 마이그레이션 → 앱 시작.**
+
+> 실측 (2026-09-21, `SHDEVOPS\DEVOPSSQL` 인스턴스): 위 명령으로 `InitialCreate` 마이그레이션이 적용되고
+> `Users`·`Projects`·`ProjectMembers`·`Issues`·`Pages`·`Comments`·`Attachments`·`__EFMigrationsHistory`
+> 8개 테이블이 전부 생성되는 것을 확인했다.
 
 ---
 

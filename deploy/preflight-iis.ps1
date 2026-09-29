@@ -14,8 +14,11 @@
       .\preflight-iis.ps1 -PublishOutput C:\inetpub\wwwroot\workbench
 
       # 사전 조건 확인 + 게시 + 사이트 등록(WebAdministration 필요, 관리자 권한)
+      # 포트 443 이면 바인딩을 https(SNI) 로 자동 전환한다. -CertificateThumbprint 를 주면
+      # Cert:\LocalMachine\My 에서 찾아 바로 붙이고, 안 주면 IIS 관리자에서 수동으로 붙여야 한다.
       .\preflight-iis.ps1 -PublishOutput C:\inetpub\wwwroot\workbench `
-          -RegisterSite -SiteName Workbench -AppPoolName Workbench -Port 443 -Hostname workbench.internal
+          -RegisterSite -SiteName Workbench -AppPoolName Workbench -Port 443 -Hostname workbench.internal `
+          -CertificateThumbprint <LocalMachine\My 저장소의 인증서 지문>
 
       # 이미 떠 있는 사이트에 스모크 테스트만
       .\preflight-iis.ps1 -CheckOnly:$false -SkipPreflight -SkipPublish -SmokeTestUrl https://workbench.internal
@@ -35,6 +38,7 @@ param(
     [string]$AppPoolName,
     [string]$Hostname,
     [int]$Port = 443,
+    [string]$CertificateThumbprint,
 
     [string]$SmokeTestUrl,
     [switch]$SkipSmokeTest,
@@ -77,11 +81,20 @@ function Write-CheckResult {
 # --- 1. 사전 조건 (DEPLOY.md 1절 표와 1:1 대응) ---------------------------------
 
 function Test-HostingBundle {
-    # ANCM v2 모듈 DLL 이 inetsrv 에 있는지로 판정한다 — Hosting Bundle 이 없으면 아예 없다.
-    $inetsrv = Join-Path $env:WINDIR 'System32\inetsrv'
-    $ancmV2 = Join-Path $inetsrv 'aspnetcore*.dll'
-    $found = @(Get-ChildItem -Path $ancmV2 -ErrorAction SilentlyContinue)
+    # ANCM v2 모듈 DLL 실제 설치 경로는 inetsrv 가 아니라 Program Files 다 —
+    # 설치 프로그램이 여기 복사하고 applicationHost.config 의 globalModules 가 이 경로를 가리킨다.
+    # (실측: inetsrv 밑에는 aspnetcore*.dll 이 전혀 없다 — 예전 버전 스크립트가 여기를 잘못 봐서
+    #  Hosting Bundle 이 실제로 설치돼 있어도 항상 FAIL 났다.)
+    $ancmCandidates = @(
+        (Join-Path $env:ProgramFiles 'IIS\Asp.Net Core Module\V2\aspnetcorev2.dll')
+    )
+    if (${env:ProgramFiles(x86)}) {
+        $ancmCandidates += (Join-Path ${env:ProgramFiles(x86)} 'IIS\Asp.Net Core Module\V2\aspnetcorev2.dll')
+    }
+    $found = @($ancmCandidates | Where-Object { Test-Path $_ })
 
+    # ANCM v2 는 버전 무관 공용 네이티브 모듈이다 — 실제로 이 앱을 띄우려면
+    # 별도로 ASP.NET Core 8.x 공유 런타임이 있어야 한다(Hosting Bundle 이 8.x 용이 아니어도 무방).
     $runtimeOk = $false
     try {
         $runtimes = & dotnet --list-runtimes 2>$null
@@ -93,8 +106,9 @@ function Test-HostingBundle {
 
     $passed = ($found.Count -gt 0) -and $runtimeOk
     $detail = if (-not $passed) {
-        ".NET 8 Hosting Bundle 을 설치하라 (ANCM v2 DLL 없음 또는 ASP.NET Core 8 런타임 없음). " +
-        "없이 배포하면 500.19 로 죽는다."
+        ".NET Hosting Bundle(ANCM v2) 과 ASP.NET Core 8.x 공유 런타임이 둘 다 있어야 한다 " +
+        "(ANCM 은 $($ancmCandidates -join ' 또는 ') 에 없음, 또는 'dotnet --list-runtimes' 에 " +
+        "Microsoft.AspNetCore.App 8.x 없음). 없이 배포하면 500.19 로 죽는다."
     } else { "" }
 
     Write-CheckResult -Name '.NET 8 Hosting Bundle (ANCM v2)' -Passed $passed -Detail $detail
@@ -232,10 +246,31 @@ function Invoke-RegisterSite {
     $physicalPath = (Resolve-Path $PublishOutput).Path
 
     if (-not (Test-Path "IIS:\Sites\$SiteName")) {
-        $binding = if ($Hostname) { "*:${Port}:$Hostname" } else { "*:${Port}:" }
+        # New-Website 가 만드는 기본 바인딩은 http 다 -Ssl 스위치만으로는 SNI 플래그를
+        # 세밀하게 제어할 수 없어서, 일단 만든 뒤 포트 443 이면 New-WebBinding 으로 바꿔 끼운다.
         New-Website -Name $SiteName -PhysicalPath $physicalPath -ApplicationPool $AppPoolName `
             -Port $Port -HostHeader $Hostname | Out-Null
         Write-Host "  사이트 생성: $SiteName ($physicalPath, 포트 $Port)" -ForegroundColor Green
+
+        if ($Port -eq 443) {
+            Get-WebBinding -Name $SiteName | Remove-WebBinding
+            New-WebBinding -Name $SiteName -Protocol https -Port $Port -HostHeader $Hostname -SslFlags 1 | Out-Null
+            Write-Host "  바인딩을 https(SNI) 로 설정: *:$Port`:$Hostname" -ForegroundColor Green
+
+            if ($CertificateThumbprint) {
+                $cert = Get-Item "Cert:\LocalMachine\My\$CertificateThumbprint" -ErrorAction SilentlyContinue
+                if ($cert) {
+                    (Get-WebBinding -Name $SiteName -Protocol https).AddSslCertificate($CertificateThumbprint, 'My')
+                    Write-Host "  SSL 인증서 바인딩 완료 (thumbprint: $CertificateThumbprint)" -ForegroundColor Green
+                }
+                else {
+                    Write-Host "  경고: 인증서 지문 '$CertificateThumbprint' 을 Cert:\LocalMachine\My 에서 찾지 못했다 - IIS 관리자 > 사이트 바인딩에서 수동으로 선택하라." -ForegroundColor Yellow
+                }
+            }
+            else {
+                Write-Host "  -CertificateThumbprint 를 주지 않아 인증서는 바인딩하지 않았다 - IIS 관리자 > 사이트 바인딩 편집에서 수동으로 인증서를 선택하라." -ForegroundColor Yellow
+            }
+        }
     }
     else {
         Set-ItemProperty "IIS:\Sites\$SiteName" -Name physicalPath -Value $physicalPath
