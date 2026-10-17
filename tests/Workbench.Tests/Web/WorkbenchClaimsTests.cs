@@ -41,6 +41,38 @@ public class WorkbenchClaimsTests
     }
 
     [Fact]
+    public void RealisticEntraIdToken_UsesOidNotTheAppScopedSub()
+    {
+        // Entra id_token 은 앱마다 다른(pairwise) sub 를 함께 싣고, 기본 클레임 매핑이 이것을
+        // NameIdentifier 로 바꿔 놓는다. sub 가 GUID 모양이어도 사용자 Id 는 oid 여야 한다 —
+        // 그렇지 않으면 앱 등록을 바꿀 때마다 같은 사람이 다른 사용자로 프로비저닝된다.
+        var sub = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        var principal = Authenticated(
+            new Claim(ClaimTypes.NameIdentifier, sub.ToString()),
+            new Claim(WorkbenchClaims.ObjectId, ObjectId.ToString()),
+            new Claim("http://schemas.microsoft.com/identity/claims/tenantid", Guid.NewGuid().ToString()),
+            new Claim("name", "홍길동"),
+            new Claim("preferred_username", "gildong@example.com"));
+
+        var result = WorkbenchClaims.ToCurrentUser(principal);
+
+        Assert.Equal(ObjectId, result.Id);
+        Assert.NotEqual(sub, result.Id);
+    }
+
+    [Fact]
+    public void RealisticEntraIdToken_WithOnlyANonGuidSub_FailsClosed()
+    {
+        // oid 가 빠진 토큰(범위 구성 실수 등)에서 sub 로 추측해 통과시키지 않는다.
+        var principal = Authenticated(
+            new Claim(ClaimTypes.NameIdentifier, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+            new Claim("name", "홍길동"),
+            new Claim("preferred_username", "gildong@example.com"));
+
+        Assert.False(WorkbenchClaims.ToCurrentUser(principal).IsAuthenticated);
+    }
+
+    [Fact]
     public void MissingDisplayName_FallsBackToEmail()
     {
         var principal = Authenticated(

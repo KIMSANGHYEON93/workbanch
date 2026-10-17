@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,6 +59,43 @@ public class AuthenticationWiringTests
     }
 
     [Fact]
+    public async Task EntraIdMode_RegistersOpenIdConnectAsTheDefaultScheme()
+    {
+        var provider = BuildEntraIdProvider(
+            ("AzureAd:Instance", "https://login.microsoftonline.com/"),
+            ("AzureAd:TenantId", "11111111-1111-1111-1111-111111111111"),
+            ("AzureAd:ClientId", "22222222-2222-2222-2222-222222222222"),
+            ("AzureAd:ClientSecret", "dummy-secret"),
+            ("AzureAd:CallbackPath", "/signin-oidc"));
+
+        var schemes = provider.GetRequiredService<IAuthenticationSchemeProvider>();
+
+        var scheme = await schemes.GetDefaultAuthenticateSchemeAsync();
+
+        Assert.Equal(OpenIdConnectDefaults.AuthenticationScheme, scheme?.Name);
+        // 개발용 핸들러가 EntraId 모드에 섞여 들어오면 "아무나 관리자" 가 된다.
+        Assert.Null(await schemes.GetSchemeAsync(DevelopmentAuthenticationHandler.SchemeName));
+    }
+
+    [Fact]
+    public void EntraIdMode_CarriesTheAppRegistrationIntoTheOpenIdConnectOptions()
+    {
+        var provider = BuildEntraIdProvider(
+            ("AzureAd:Instance", "https://login.microsoftonline.com/"),
+            ("AzureAd:TenantId", "11111111-1111-1111-1111-111111111111"),
+            ("AzureAd:ClientId", "22222222-2222-2222-2222-222222222222"),
+            ("AzureAd:ClientSecret", "dummy-secret"),
+            ("AzureAd:CallbackPath", "/signin-oidc"));
+
+        var oidc = provider.GetRequiredService<IOptionsMonitor<OpenIdConnectOptions>>()
+            .Get(OpenIdConnectDefaults.AuthenticationScheme);
+
+        Assert.Equal("22222222-2222-2222-2222-222222222222", oidc.ClientId);
+        Assert.Contains("11111111-1111-1111-1111-111111111111", oidc.Authority);
+        Assert.Equal("/signin-oidc", oidc.CallbackPath.Value);
+    }
+
+    [Fact]
     public async Task DevelopmentHandler_EmitsClaimsTheMapperUnderstands()
     {
         // 핸들러가 심는 클레임과 매퍼가 읽는 클레임이 갈라지면 "로그인은 됐는데 사용자가 없다" 가 된다.
@@ -97,6 +135,21 @@ public class AuthenticationWiringTests
 
         Assert.True(result.Succeeded);
         return result.Principal!;
+    }
+
+    private static ServiceProvider BuildEntraIdProvider(params (string Key, string Value)[] azureAd)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+
+        var values = azureAd.Append(("Authentication:Mode", "EntraId")).ToArray();
+        var configuration = Configuration(values);
+        // 실제 호스트는 IConfiguration 을 항상 등록한다. Microsoft.Identity.Web 이 옵션을 만들 때 꺼내 쓴다.
+        services.AddSingleton(configuration);
+        services.AddWorkbenchAuthentication(configuration, Environment(Environments.Production));
+
+        return services.BuildServiceProvider();
     }
 
     private static IConfiguration Configuration(params (string Key, string Value)[] values) =>
