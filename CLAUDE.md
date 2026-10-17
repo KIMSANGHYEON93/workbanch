@@ -13,8 +13,8 @@ ASP.NET Core 8 / Blazor Server / EF Core / Entra ID / Azure Blob / Markdig / Boo
 
 ## 회귀 가드 (정본)
 
-- **단위 테스트 306/306** (`dotnet test`, skip 0) + **빌드 0 error / 0 warning** — 2026-09-16 실측 (`chore/bunit-2-anglesharp-fix` = `6d5f4e2`)
-  - 테스트 메서드 선언 **206개**가 `[Theory]` 전개로 **306 케이스**가 된다. 두 수를 혼동하지 말 것.
+- **단위 테스트 310/310** (`dotnet test`, skip 0) + **빌드 0 error / 0 warning** — 2026-10-17 실측 (`feat/entra-id-auth` = `665bb57`)
+  - 테스트 메서드 선언 **210개**가 `[Theory]` 전개로 **310 케이스**가 된다. 두 수를 혼동하지 말 것.
   - 이전에 있던 `NU1902`(AngleSharp 1.2.0, moderate) 경고 2건은 해소됐다. bUnit 을 1.40 → 2.11.3 으로 올려 AngleSharp 1.8.1 을 정식으로 물게 했다(`bunit.web` 1.40.0 은 net8.0 대상에서 AngleSharp 1.2.0 에 바이너리로 고정돼 있어 단독으로 올릴 수 없었다 — `RenderComponent<T>()` → `Render<T>()`, `TestContext` → `BunitContext` 동반 마이그레이션 필요).
 
 > **이 줄이 회귀 기준선의 유일한 정본이다.** 다른 문서·PR 본문·커밋 메시지는 숫자를 복제하지 말고 여기를 가리킨다.
@@ -167,3 +167,4 @@ SQLite 데모 모드는 `EnsureCreated` 로 스키마를 세운다 — 인덱스
 | 2026-09-16 | `CLAUDE.md` 신설 — `knox-mail-pipeline` 의 작업 방식(회귀 가드 규약·뮤테이션 게이트·실측 우선·디버깅 프로토콜)을 이 저장소 맥락으로 이관하고, 이번까지 겪은 함정 4건을 기록 | 저장소가 분리되면서 작업 규약이 원본 저장소에만 남아 있었다. README 는 설계 기록이라 "어떻게 작업하는가" 를 담는 자리가 없었다 |
 | 2026-09-16 | bUnit 1.40 → 2.11.3, `NU1902`(AngleSharp 1.2.0) 경고 해소. 회귀 가드 정본 줄 갱신(`6d5f4e2`, 0 error / 0 warning) | AngleSharp 만 단독으로 올리면 bUnit 1.40 과 바이너리 비호환(뮤테이션 없이도 실패로 관측)이라, 실제 해법인 bUnit 메이저 업그레이드로 처리 |
 | 2026-09-16 | `DEPLOY.md` + `deploy/web.config.snippet.xml` + `deploy/preflight-iis.ps1` 신설 — IIS 배포 가이드 | 「아직 이 저장소에 없는 것」에 있던 항목을 채움. 첨부 업로드가 HTTP POST 가 아니라 Blazor 회로(SignalR) 로 흐른다는 걸 코드로 확인해, IIS 요청 상한이 실제로는 이 경로를 막지 않는다는 점을 정정해 기록 |
+| 2026-10-17 | 회귀 가드 정본 줄 갱신 306 → 310 (메서드 선언 206 → 210, `665bb57`) | EntraId 인증 분기·실제 토큰 모양 클레임 매핑 테스트 4건 추가(PR #7). 4건 모두 뮤테이션으로 빨개짐을 관측 |
